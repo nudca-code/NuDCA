@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from typing import Dict, Set, List, Union
-import itertools
-import collections
 
 import numpy as np
 import pandas as pd

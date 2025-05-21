@@ -29,11 +29,7 @@ NuDCA is a powerful scientific computing library for nuclear decay and kilonovae
 ## Installation
 
 ```bash
-# Using pip
 pip install nudca
-
-# Using poetry
-poetry add nudca
 ```
 
 ## Quick Start
@@ -47,15 +43,13 @@ db = DecayDatabase('ENDF-B-VIII.1_decay')
 # Get nuclide information
 half_life = db.half_life('U-238')
 progeny = db.progeny('U-238')
-decay_energy = db.decay_energy('U-238', 'Alpha')
+decay_energy = db.decay_energy('U-238', 'EM')
 
-# Create decay matrix
-matrix = DecayMatrix.from_database(db)
 
 # Plot nuclear chart
 db.plot_nuclear_chart(
-    min_lifetime=1.0,
-    max_lifetime=1e10,
+    min_half_life=1.0,
+    max_half_life=1e10,
     cmap='viridis'
 )
 ```
@@ -74,11 +68,11 @@ If you use NuDCA in your research, please cite:
 
 ```bibtex
 @software{nudca,
-  author = {Qiuhong-Chen},
+  author = {Qiuhong-Chen and Menghua-Chen},
   title = {NuDCA: A Numerical Code for Nuclear Decay Chains in Astrophysics},
   year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/yourusername/nudca}
+  url = {https://github.com/QiuhongChen/NuDCA.git}
 }
 ```
 

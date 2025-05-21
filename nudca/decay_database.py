@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import ast
+import itertools
 from pathlib import Path
 from typing import Dict, List, Union, Optional, Tuple
+
 
 import numpy as np
 import pandas as pd
@@ -92,6 +94,14 @@ class DecayDatabase:
         return self.decay_constants_data[self.nuclide_index_map[nuclide]]
     
 
+    def proton_numbers(self) -> np.ndarray:
+        return np.array([Nuclide(nuclide).Z for nuclide in self.nuclides])
+
+
+    def neutron_numbers(self) -> np.ndarray:
+        return np.array([Nuclide(nuclide).N for nuclide in self.nuclides])
+    
+
     def decay_energy(self, nuclide: str, energy_type: str) -> float:
         """Get specific decay energy by type."""
         energy_map = {
@@ -140,98 +150,95 @@ class DecayDatabase:
         ])
         return np.nansum(energy)
     
-    
-    
+
 
     def plot_nuclear_chart(
         self,
         figure: plt.figure = None,
-        min_lifetime: float = 1.0,
-        max_lifetime: float = None,
         cmap: mpl.colors.Colormap = cm.viridis,
         nuclei_linewidths: float = 0.8,
         colorbar: bool = True,
-        figsize: tuple[float, float] = (20, 16),
+        figsize: tuple[float, float] = (12, 8),
+        dpi: int = 250,
+        min_half_life: float = 1.0,
+        max_half_life: float = 4.36e17,
         magic_numbers: list[int] = [2, 8, 20, 28, 50, 82, 126],
         **kwargs
     ) -> plt.figure:
 
-        proton_numbers, neutron_numbers, half_lives, is_stable = [], [], [], []
+        nuclide_map = {}
         for nuclide in self.nuclides:
             try:
                 parsed = Nuclide(nuclide)
                 Z = parsed.Z
-                A = parsed.A
-                N = A - Z
-                hl = self.half_life(nuclide, units="s")
-                proton_numbers.append(Z)
-                neutron_numbers.append(N)
-                is_stable.append(hl == np.inf)
-                half_lives.append(hl if hl > 0 else min_lifetime)
-            except Exception as e:
+                N = parsed.N
+                state = parsed.state
+                if state:
+                    continue
+                half_life = self.half_life(nuclide, units="s")
+                nuclide_map[(N, Z)] = half_life
+            except Exception:
                 continue
 
-        proton_numbers = np.array(proton_numbers)
-        neutron_numbers = np.array(neutron_numbers)
-        half_lives = np.array(half_lives)
-        is_stable = np.array(is_stable)
+        if not nuclide_map:
+            raise ValueError("No valid nuclide data for plotting.")
 
-
-        valid_hl = half_lives[(half_lives > 0) & np.isfinite(half_lives)]
-        if not len(valid_hl):
+        neutron_numbers = np.array([N for (N, Z) in nuclide_map.keys()])
+        proton_numbers = np.array([Z for (N, Z) in nuclide_map.keys()])
+        half_lives = np.array([nuclide_map[(N, Z)] for (N, Z) in nuclide_map.keys()])
+        half_life_values = half_lives[np.isfinite(half_lives) & (half_lives > 0) & (half_lives < max_half_life)]
+        if not len(half_life_values):
             raise ValueError("No valid half-life data.")
-        max_lifetime = max(valid_hl) if max_lifetime is None else max_lifetime
-        norm = mpl.colors.LogNorm(vmin=min_lifetime, vmax=max_lifetime)
-
-        colors = []
-        for hl, stable in zip(half_lives, is_stable):
-            if stable or hl > 3.e17:
-                colors.append((0.0, 0.0, 0.0, 1.0))  # black
-            elif hl < 1:
-                colors.append((0.5, 0.5, 0.5, 1.0))  # gray
-            else:
-                colors.append(cmap(norm(hl)))
-        colors = np.array(colors)
-
+        max_half_life = half_life_values.max()
+        norm = mpl.colors.LogNorm(vmin=min_half_life, vmax=max_half_life)
 
         if figure is None:
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
         else:
             fig = figure
             ax = fig.gca()
         ax.set_aspect('equal')
 
-
-        rectangles = [Rectangle((n-0.5, z-0.5), 1, 1) for n, z in zip(neutron_numbers, proton_numbers)]
-        pc = PatchCollection(rectangles, facecolor=colors, edgecolor='black', linewidths=nuclei_linewidths)
+        rectangles = []
+        colors = []
+        for (N, Z) in nuclide_map.keys():
+            half_life = nuclide_map[(N, Z)]
+            rectangles.append(Rectangle((N-0.5, Z-0.5), 1, 1, fill=True))
+            if half_life == np.inf:
+                colors.append((0.0, 0.0, 0.0, 1.0))  # black
+            elif half_life >= 0 and half_life < min_half_life:
+                colors.append((0.5, 0.5, 0.5, 1.0))  # gray
+            elif half_life >= max_half_life:
+                colors.append((1.0, 1.0, 0.0, 1.0))  # yellow
+            else:
+                colors.append(cmap(norm(half_life)))
+        pc = PatchCollection(rectangles, facecolor=colors, edgecolor='black', linewidths=nuclei_linewidths, zorder=1)
         ax.add_collection(pc)
 
-
         for magic_number in magic_numbers:
-            mask_n = neutron_numbers == magic_number
-            if np.any(mask_n):
-                z_min, z_max = proton_numbers[mask_n].min(), proton_numbers[mask_n].max()
-                ax.add_patch(Rectangle((magic_number-0.5, z_min-0.5), 1, z_max - z_min + 1,
-                                       fill=False, edgecolor='black', linewidth=2, linestyle='-', zorder=10))
+            mask_N = neutron_numbers == magic_number
+            if np.any(mask_N):
+                Z_min, Z_max = proton_numbers[mask_N].min(), proton_numbers[mask_N].max()
+                ax.add_patch(Rectangle((magic_number-0.5, Z_min-0.5), 1, Z_max - Z_min + 1,
+                                       fill=False, edgecolor='black', linewidth=2, linestyle='--', zorder=5))
                 
-            mask_z = proton_numbers == magic_number
-            if np.any(mask_z):
-                n_min, n_max = neutron_numbers[mask_z].min(), neutron_numbers[mask_z].max()
-                ax.add_patch(Rectangle((n_min - 0.5, magic_number - 0.5), n_max - n_min + 1, 1,
-                                       fill=False, edgecolor='black', linewidth=2, linestyle='-', zorder=10))
-        
-        ax.set_xlim(neutron_numbers.min()-1, neutron_numbers.max()+5)
-        ax.set_ylim(proton_numbers.min()-1, proton_numbers.max()+5)
+            mask_Z = proton_numbers == magic_number
+            if np.any(mask_Z):
+                N_min, N_max = neutron_numbers[mask_Z].min(), neutron_numbers[mask_Z].max()
+                ax.add_patch(Rectangle((N_min - 0.5, magic_number - 0.5), N_max - N_min + 1, 1,
+                                       fill=False, edgecolor='black', linewidth=2, linestyle='--', zorder=5))
+
+        ax.set_xlim(neutron_numbers.min() - 1, neutron_numbers.max() + 5)
+        ax.set_ylim(proton_numbers.min() - 1, proton_numbers.max() + 5)
         ax.set_xlabel('Neutron Number (N)', fontsize=16)
         ax.set_ylabel('Proton Number (Z)', fontsize=16)
-        
 
         if colorbar:
             mappable = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
             divider = make_axes_locatable(ax)
-            cax = divider.append_axes(position='right', size="3%", pad=0.01, aspect=1)
-            cbar = fig.colorbar(mappable, cax=cax)
-            cbar.set_label('Half-life (s)', fontsize=14)
+            cax = divider.append_axes(position='right', size="5%", pad=0.01, aspect=1)
+            cbar = fig.colorbar(mappable, ax=ax, cax=cax)
+            cbar.set_label('Half-life (s)', fontsize=12)
 
         return fig
     
@@ -303,14 +310,11 @@ class DecayDatabaseManager:
 
 
     def save_decay_database(self):
-        # df = pd.read_json(self.data_path.joinpath(f'{self.data_source}.json'), orient='records')
-        # df = self._sort_algorithm(df)
         
-        # df.to_csv(self.data_path.joinpath(f'{self.data_source}_sorted.csv'), index=False)
-        # df.to_json(self.data_path.joinpath(f'{self.data_source}_sorted.json'), orient='records', indent=4)
-
         df = pd.read_json(self.data_path.joinpath(f'{self.data_source}.json'), orient='records')
         df = self._sort_algorithm(df)
+        df.to_csv(self.data_path.joinpath(f'{self.data_source}_sorted.csv'), index=False)
+        df.to_json(self.data_path.joinpath(f'{self.data_source}_sorted.json'), orient='records', indent=4)
         
         (
             nuclides,
