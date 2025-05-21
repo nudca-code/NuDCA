@@ -11,11 +11,138 @@ from .nuclide import Nuclide, Z_to_element
 from .decay_database import load_decay_database
 
 
-class IO:
-
+class Outputer:
+    """
+    Output utility for saving calculation results (abundances, heating rates) to file.
+    Supports CSV, Excel, and JSON formats.
+    """
     def __init__(self):
         pass
 
+
+    @staticmethod
+    def save_abundance(
+        abundance: Union[Dict[str, float], pd.DataFrame],
+        filename: Union[str, Path],
+        filetype: Optional[str] = None,
+        index: bool = True
+    ):
+        """
+        Save nuclide abundance (dict or DataFrame) to file.
+        Args:
+            abundance: Dict or DataFrame of nuclide abundances (can be time series DataFrame).
+            filename: Output file path.
+            filetype: 'csv', 'xlsx', or 'json'. If None, inferred from filename.
+            index: Whether to write DataFrame index (default True).
+        """
+        if filetype is None:
+            filetype = str(filename).split('.')[-1].lower()
+        if isinstance(abundance, dict):
+            df = pd.DataFrame(list(abundance.items()), columns=["nuclide", "abundance"])
+        else:
+            df = abundance
+        if filetype == 'csv':
+            df.to_csv(filename, index=index)
+        elif filetype in ('xls', 'xlsx'):
+            df.to_excel(filename, index=index)
+        elif filetype == 'json':
+            df.to_json(filename, orient='records', indent=2)
+        else:
+            raise ValueError(f"Unsupported filetype: {filetype}")
+
+    @staticmethod
+    def save_heating_rate(
+        heating_rate: Union[List[float], np.ndarray, pd.Series, pd.DataFrame],
+        times: Optional[Union[List[float], np.ndarray]] = None,
+        filename: Union[str, Path] = "heating_rate.csv",
+        filetype: Optional[str] = None
+    ):
+        """
+        Save heating rate (with optional time axis) to file.
+        Args:
+            heating_rate: List/array/Series/DataFrame of heating rates.
+            times: Optional time points (same length as heating_rate).
+            filename: Output file path.
+            filetype: 'csv', 'xlsx', or 'json'. If None, inferred from filename.
+        """
+        if filetype is None:
+            filetype = str(filename).split('.')[-1].lower()
+        if isinstance(heating_rate, (list, np.ndarray, pd.Series)):
+            if times is not None:
+                df = pd.DataFrame({"time": times, "heating_rate": heating_rate})
+            else:
+                df = pd.DataFrame({"heating_rate": heating_rate})
+        else:
+            df = heating_rate
+        if filetype == 'csv':
+            df.to_csv(filename, index=False)
+        elif filetype in ('xls', 'xlsx'):
+            df.to_excel(filename, index=False)
+        elif filetype == 'json':
+            df.to_json(filename, orient='records', indent=2)
+        else:
+            raise ValueError(f"Unsupported filetype: {filetype}")
+
+
+class Inputer:
+    """
+    Input utility for reading initial nuclide abundances from file.
+    Supports CSV, TSV, Excel, and JSON formats.
+    """
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def read_abundance(
+        filename: Union[str, Path],
+        filetype: Optional[str] = None,
+        nuclide_col: str = "nuclide",
+        abundance_col: str = "abundance"
+    ) -> Dict[str, float]:
+        """
+        Read initial nuclide abundances from file.
+        Args:
+            filename: Input file path.
+            filetype: 'csv', 'tsv', 'xlsx', or 'json'. If None, inferred from filename.
+            nuclide_col: Column name for nuclide symbol (default 'nuclide').
+            abundance_col: Column name for abundance (default 'abundance').
+        Returns:
+            Dict[str, float]: Mapping from nuclide symbol to abundance.
+        """
+        if filetype is None:
+            filetype = str(filename).split('.')[-1].lower()
+        if filetype == 'csv':
+            df = pd.read_csv(filename)
+        elif filetype == 'tsv':
+            df = pd.read_csv(filename, sep='\t')
+        elif filetype in ('xls', 'xlsx'):
+            df = pd.read_excel(filename)
+        elif filetype == 'json':
+            df = pd.read_json(filename)
+        else:
+            raise ValueError(f"Unsupported filetype: {filetype}")
+        # Try to find the correct columns
+        cols = [col.lower() for col in df.columns]
+        ncol = nuclide_col if nuclide_col in df.columns else None
+        acol = abundance_col if abundance_col in df.columns else None
+        if ncol is None:
+            for c in df.columns:
+                if c.lower() in ["nuclide", "isotope", "nuc", "species"]:
+                    ncol = c
+                    break
+        if acol is None:
+            for c in df.columns:
+                if c.lower() in ["abundance", "quantity", "amount", "y"]:
+                    acol = c
+                    break
+        if ncol is None or acol is None:
+            raise ValueError(f"Could not find nuclide or abundance columns in {filename}")
+        # Standardize nuclide symbols
+        nuclide_abundance = {}
+        for _, row in df.iterrows():
+            symbol = Nuclide(row[ncol]).nuclide_symbol
+            nuclide_abundance[symbol] = float(row[acol])
+        return nuclide_abundance
 
 
 def add_dictionaries(dict_a: Dict[str, float], dict_b: Dict[str, float]) -> Dict[str, float]:

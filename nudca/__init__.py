@@ -31,7 +31,7 @@ __version__ = '0.1.0'
 __author__ = 'Qiuhong-Chen'
 __email__ = 'chohonche@163.com'
 __license__ = 'MIT'
-__url__ = 'https://github.com/chohonche/nudca'
+__url__ = 'https://github.com/QiuhongChen/NuDCA'
 
 # Core classes and functions
 from .decay_database import (
@@ -49,16 +49,9 @@ from .nuclide import (
     NuclideStrError
 )
 from .nucleo_decay import (
-    RadioactiveDecay,
-    RadioactiveDecayBase
+    RadioactiveDecay
 )
 
-# Constants and utilities
-from .constants import (
-    NA_CGS,
-    EV_CGS,
-    # Add other constants as needed
-)
 
 # Import specific functions from io module
 # from .io import (
@@ -69,7 +62,6 @@ from .constants import (
 # Import visualization tools
 from .decay_diagram import (
     DecayDiagram,
-    # plot_nuclear_chart
 )
 
 # Kilonovae module
@@ -86,7 +78,7 @@ __all__ = [
     'Nuclide',
     'NuclideStrError',
     'RadioactiveDecay',
-    'RadioactiveDecayBase',
+    
     
     # Functions
     'load_decay_database',

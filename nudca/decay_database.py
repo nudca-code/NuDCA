@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import ast
-import itertools
 from pathlib import Path
-from typing import Dict, List, Union, Optional, Tuple
-
+from typing import Dict, List, Tuple, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -19,6 +17,10 @@ from .nuclide import Nuclide, NuclideStrError
 
 
 class DecayDatabase:
+    """
+    A class representing a database of nuclear decay data for a set of nuclides.
+    Provides access to half-lives, decay modes, progeny, branching ratios, decay energies, and plotting utilities.
+    """
 
     def __init__(
             self,
@@ -31,7 +33,18 @@ class DecayDatabase:
             branching_ratios_data: np.ndarray,
             decay_energies_data: np.ndarray
         )-> None:
-        
+        """
+        Initialize the DecayDatabase with all relevant nuclear decay data arrays.
+        Args:
+            data_source (str): Name of the data source (e.g., ENDF-B-VIII.1_decay).
+            nuclides (np.ndarray): Array of nuclide symbols.
+            half_life_data (np.ndarray): Array of half-life data tuples.
+            decay_constants_data (np.ndarray): Array of decay constants.
+            decay_modes_data (np.ndarray): Array of decay modes for each nuclide.
+            progeny_data (np.ndarray): Array of progeny lists for each nuclide.
+            branching_ratios_data (np.ndarray): Array of branching ratios for each nuclide.
+            decay_energies_data (np.ndarray): Array of decay energies for each nuclide.
+        """
         self.data_source = data_source
         self.nuclides = nuclides
         self.half_life_data = half_life_data
@@ -41,13 +54,17 @@ class DecayDatabase:
         self.branching_ratios_data = branching_ratios_data
         self.decay_energies_data = decay_energies_data
 
+        # Map from nuclide symbol to its index in the arrays
         self.nuclide_index_map: Dict[str, int] = {
             nuclide: index for index, nuclide in enumerate(self.nuclides)
         }
 
 
     def _validate_nuclide(self, nuclide: str) -> str:
-        """Validate nuclide and return its standardized symbol."""
+        """
+        Validate the nuclide string and return its standardized symbol.
+        Raises NuclideStrError if invalid or not found in the database.
+        """
         try:
             symbol = Nuclide(nuclide).nuclide_symbol
         except Exception as e:
@@ -58,6 +75,14 @@ class DecayDatabase:
     
 
     def half_life(self, nuclide: str, units: str = 'readable') -> Union[float, str]:
+        """
+        Get the half-life of a nuclide in the specified units.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+            units (str): 'readable', 's', or other (returns value in original units).
+        Returns:
+            float or str: Half-life in the requested units or as a readable string.
+        """
         nuclide = self._validate_nuclide(nuclide)
         (
             half_life_second,
@@ -74,36 +99,83 @@ class DecayDatabase:
         return half_life
 
 
-    def progeny(self, nuclide) -> list[str]:
+    def progeny(self, nuclide) -> List[str]:
+        """
+        Get the list of progeny (daughter nuclides) for a given nuclide.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+        Returns:
+            list[str]: List of progeny nuclide symbols.
+        """
         nuclide = self._validate_nuclide(nuclide)
         return self.progeny_data[self.nuclide_index_map[nuclide]]
     
     
-    def branching_ratios(self, nuclide: str) -> List:
+    def branching_ratios(self, nuclide: str) -> List[float]:
+        """
+        Get the branching ratios for all decay modes of a nuclide.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+        Returns:
+            List: Branching ratios for each decay mode.
+        """
         nuclide = self._validate_nuclide(nuclide)
         return self.branching_ratios_data[self.nuclide_index_map[nuclide]]
     
     
-    def decay_modes(self, nuclide: str) -> List:
+    def decay_modes(self, nuclide: str) -> List[str]:
+        """
+        Get the decay modes for a given nuclide.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+        Returns:
+            List: Decay modes for the nuclide.
+        """
         nuclide = self._validate_nuclide(nuclide)
         return self.decay_modes_data[self.nuclide_index_map[nuclide]]
     
 
-    def decay_constants(self, nuclide: str) -> float:
+    def decay_constants(self, nuclide: str) -> np.ndarray:
+        """
+        Get the decay constant (lambda) for a nuclide.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+        Returns:
+            float: Decay constant in 1/s.
+        """
         nuclide = self._validate_nuclide(nuclide)
         return self.decay_constants_data[self.nuclide_index_map[nuclide]]
     
 
     def proton_numbers(self) -> np.ndarray:
+        """
+        Get the array of proton numbers (Z) for all nuclides in the database.
+        Returns:
+            np.ndarray: Array of proton numbers.
+        """
         return np.array([Nuclide(nuclide).Z for nuclide in self.nuclides])
 
 
     def neutron_numbers(self) -> np.ndarray:
+        """
+        Get the array of neutron numbers (N) for all nuclides in the database.
+        Returns:
+            np.ndarray: Array of neutron numbers.
+        """
         return np.array([Nuclide(nuclide).N for nuclide in self.nuclides])
     
 
     def decay_energy(self, nuclide: str, energy_type: str) -> float:
-        """Get specific decay energy by type."""
+        """
+        Get a specific type of decay energy for a nuclide.
+        Args:
+            nuclide (str): Nuclide symbol or string.
+            energy_type (str): Type of decay energy (e.g., 'EM', 'LP', 'HP', 'Neutrino', etc.).
+        Returns:
+            float: Decay energy value.
+        Raises:
+            ValueError: If the energy_type is invalid.
+        """
         energy_map = {
             'EM':          0,
             'LP':          1,
@@ -126,22 +198,41 @@ class DecayDatabase:
 
 
     def decay_energy_EM(self, nuclide: str) -> float:
+        """
+        Get the electromagnetic decay energy for a nuclide.
+        """
         return self.decay_energy(nuclide, 'EM')
 
 
     def decay_energy_LP(self, nuclide: str) -> float:
+        """
+        Get the light particle decay energy for a nuclide.
+        """
         return self.decay_energy(nuclide, 'LP')
 
 
     def decay_energy_HP(self, nuclide: str) -> float:
+        """
+        Get the heavy particle decay energy for a nuclide.
+        """
         return self.decay_energy(nuclide, 'HP')
     
 
     def decay_energy_neutrino(self, nuclide: str) -> float:
+        """
+        Get the neutrino decay energy for a nuclide.
+        """
         return self.decay_energy(nuclide, 'Neutrino')
     
     
     def decay_energy_released(self, nuclide: str) -> float:
+        """
+        Get the total decay energy released (sum of EM, LP, HP, and Neutrino energies).
+        Args:
+            nuclide (str): Nuclide symbol or string.
+        Returns:
+            float: Total decay energy released.
+        """
         energy = np.array([
             self.decay_energy(nuclide, 'EM'),
             self.decay_energy(nuclide, 'LP'),
@@ -154,18 +245,35 @@ class DecayDatabase:
 
     def plot_nuclear_chart(
         self,
-        figure: plt.figure = None,
+        figure: Optional[plt.figure] = None,
         cmap: mpl.colors.Colormap = cm.viridis,
         nuclei_linewidths: float = 0.8,
         colorbar: bool = True,
-        figsize: tuple[float, float] = (12, 8),
+        figsize: Tuple[float, float] = (12, 8),
         dpi: int = 250,
         min_half_life: float = 1.0,
         max_half_life: float = 4.36e17,
-        magic_numbers: list[int] = [2, 8, 20, 28, 50, 82, 126],
+        magic_numbers: List[int] = [2, 8, 20, 28, 50, 82, 126],
         **kwargs
     ) -> plt.figure:
-
+        """
+        Plot the nuclear chart (N vs Z) colored by half-life, with magic numbers highlighted.
+        Args:
+            figure (plt.figure, optional): Existing matplotlib figure to plot on.
+            cmap (mpl.colors.Colormap): Colormap for half-life.
+            nuclei_linewidths (float): Line width for nuclide boxes.
+            colorbar (bool): Whether to show colorbar.
+            figsize (Tuple[float, float]): Figure size.
+            dpi (int): Dots per inch for the figure.
+            min_half_life (float): Minimum half-life for color normalization.
+            max_half_life (float): Maximum half-life for color normalization.
+            magic_numbers (List): List of magic numbers to highlight.
+            **kwargs: Additional keyword arguments for plotting.
+        Returns:
+            plt.figure: The matplotlib figure object.
+        Raises:
+            ValueError: If no valid nuclide or half-life data is available.
+        """
         nuclide_map = {}
         for nuclide in self.nuclides:
             try:
@@ -174,7 +282,7 @@ class DecayDatabase:
                 N = parsed.N
                 state = parsed.state
                 if state:
-                    continue
+                    continue  # Skip metastable states
                 half_life = self.half_life(nuclide, units="s")
                 nuclide_map[(N, Z)] = half_life
             except Exception:
@@ -204,17 +312,19 @@ class DecayDatabase:
         for (N, Z) in nuclide_map.keys():
             half_life = nuclide_map[(N, Z)]
             rectangles.append(Rectangle((N-0.5, Z-0.5), 1, 1, fill=True))
+            # Color coding for special cases
             if half_life == np.inf:
-                colors.append((0.0, 0.0, 0.0, 1.0))  # black
+                colors.append((0.0, 0.0, 0.0, 1.0))  # black for stable
             elif half_life >= 0 and half_life < min_half_life:
-                colors.append((0.5, 0.5, 0.5, 1.0))  # gray
+                colors.append((0.5, 0.5, 0.5, 1.0))  # gray for very short-lived
             elif half_life >= max_half_life:
-                colors.append((1.0, 1.0, 0.0, 1.0))  # yellow
+                colors.append((1.0, 1.0, 0.0, 1.0))  # yellow for very long-lived
             else:
                 colors.append(cmap(norm(half_life)))
         pc = PatchCollection(rectangles, facecolor=colors, edgecolor='black', linewidths=nuclei_linewidths, zorder=1)
         ax.add_collection(pc)
 
+        # Highlight magic numbers
         for magic_number in magic_numbers:
             mask_N = neutron_numbers == magic_number
             if np.any(mask_N):
@@ -244,9 +354,11 @@ class DecayDatabase:
     
 
 
-
     def __eq__(self, other: object) -> bool:
-
+        """
+        Equality comparison for DecayDatabase objects.
+        Returns True if all relevant data arrays and source match.
+        """
         if not isinstance(other, DecayDatabase):
             return NotImplemented
         return (
@@ -261,11 +373,12 @@ class DecayDatabase:
 
 
     def __ne__(self, other: object) -> bool:
-
+        """
+        Inequality comparison for DecayDatabase objects.
+        """
         if not isinstance(other, DecayDatabase):
             return NotImplemented
         return not self.__eq__(other)
-
 
 
     # def __repr__(self) -> str:
@@ -276,6 +389,10 @@ class DecayDatabase:
 
 
 class DecayDatabaseManager:
+    """
+    Manager class for loading, saving, and processing nuclear decay data files.
+    Handles sorting, conversion, and serialization of decay data for use in DecayDatabase.
+    """
     
     RADIONUCLIDE_LABEL            = 'Radionuclide'
     MASS_NUMBER_LABEL             = 'A'
@@ -303,14 +420,21 @@ class DecayDatabaseManager:
     
     
     
-    def __init__(self, data_source='ENDF-B-VIII.1_decay'):
+    def __init__(self, data_source: str = 'ENDF-B-VIII.1_decay'):
+        """
+        Initialize the DecayDatabaseManager with a data source name.
+        Args:
+            data_source (str): Name of the decay data source.
+        """
         self.data_source = data_source
         self.data_path = Path(__file__).resolve().parent.joinpath('data')
 
 
-
-    def save_decay_database(self):
-        
+    def save_decay_database(self) -> None:
+        """
+        Load, sort, and save the decay database in both CSV and compressed NumPy formats.
+        This prepares the data for fast loading and use in DecayDatabase.
+        """
         df = pd.read_json(self.data_path.joinpath(f'{self.data_source}.json'), orient='records')
         df = self._sort_algorithm(df)
         df.to_csv(self.data_path.joinpath(f'{self.data_source}_sorted.csv'), index=False)
@@ -338,8 +462,17 @@ class DecayDatabaseManager:
         )
 
 
-
-    def _process_radionuclide_data(self, df):
+    def _process_radionuclide_data(
+            self,
+            df: pd.DataFrame
+        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Process the DataFrame of radionuclide data into arrays for DecayDatabase.
+        Args:
+            df (pd.DataFrame): DataFrame containing radionuclide data.
+        Returns:
+            Tuple: Arrays for nuclides, half-life, decay constants, decay modes, progeny, branching ratios, and decay energies.
+        """
         nuclides = [Nuclide(nuclide).nuclide_symbol for nuclide in df[self.RADIONUCLIDE_LABEL].values]
 
         half_life_data = np.array([
@@ -357,6 +490,7 @@ class DecayDatabaseManager:
             )
         ], dtype=object)
 
+        # Calculate decay constants (lambda = ln(2) / half-life)
         decay_constants_data: np.ndarray = np.array(
             [
                 np.log(2.0) / half_life_values[0] for half_life_values in half_life_data
@@ -401,6 +535,7 @@ class DecayDatabaseManager:
                 branching_ratios = branching_ratios_list[i][:num_decay_modes]
                 decay_modes = decay_modes_list[i][:num_decay_modes]
 
+                # Sort decay modes by branching ratio (descending), then progeny, then mode
                 sorted_triples = sorted(
                     zip(branching_ratios, progeny, decay_modes),
                     key=lambda x: (-x[0], x[1], x[2])
@@ -421,7 +556,15 @@ class DecayDatabaseManager:
         return database
 
 
-    def _sort_algorithm(self, df: pd.DataFrame, decay_mode='β-') -> pd.DataFrame:
+    def _sort_algorithm(self, df: pd.DataFrame, decay_mode: str = 'β-') -> pd.DataFrame:
+        """
+        Sort the DataFrame of nuclides for consistent ordering, prioritizing stability and decay chains.
+        Args:
+            df (pd.DataFrame): DataFrame to sort.
+            decay_mode (str): Decay mode to use for sorting chains (default: 'β-').
+        Returns:
+            pd.DataFrame: Sorted DataFrame.
+        """
         df['Is_Stable_Sort'] = df[self.IS_STABLE_LABEL].apply(lambda x: 1 if x else 0)
 
         df.sort_values(
@@ -430,6 +573,7 @@ class DecayDatabaseManager:
             inplace=True
         )
 
+        # Set infinite half-life for stable nuclides
         df.loc[df[self.IS_STABLE_LABEL] == True, self.HALF_LIFE_SECOND_LABEL] = np.inf
         df.loc[df[self.IS_STABLE_LABEL] == True, self.HALF_LIFE_VALUE_LABEL] = np.inf
 
@@ -437,13 +581,22 @@ class DecayDatabaseManager:
         sorted_df.reset_index(drop=True, inplace=True)
         sorted_df = sorted_df[df.columns.drop('Is_Stable_Sort')]
 
+        # Convert string representations of lists to actual lists
         for column in [self.BRANCHINF_RATIOS_LABEL, self.PROGENY_LABEL, self.DECAY_MODES_LABEL]:
             sorted_df = self._convert_str_to_list(sorted_df, column)
 
         return sorted_df
 
 
-    def _process_sort(self, df, decay_mode='β-'):
+    def _process_sort(self, df: pd.DataFrame, decay_mode: str = 'β-') -> pd.DataFrame:
+        """
+        Sort nuclides in the DataFrame so that decay chains (by the specified mode) are in order.
+        Args:
+            df (pd.DataFrame): DataFrame to process.
+            decay_mode (str): Decay mode to use for sorting.
+        Returns:
+            pd.DataFrame: Sorted DataFrame.
+        """
         df_dict = df.to_dict('records')
         swapped = True
 
@@ -468,6 +621,7 @@ class DecayDatabaseManager:
                     j = nuclide_to_index[daughter_nuclide]
                     daughter_row = df_dict[j]
 
+                    # Ensure parent precedes daughter in the chain
                     if (
                         current_row[self.MASS_NUMBER_LABEL] == daughter_row[self.MASS_NUMBER_LABEL] and
                         daughter_row[self.ATOMIC_NUMBER_LABEL] == current_row[self.ATOMIC_NUMBER_LABEL] + 1
@@ -483,6 +637,14 @@ class DecayDatabaseManager:
 
 
     def _convert_str_to_list(self, df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+        """
+        Convert string representations of lists in a DataFrame column to actual Python lists.
+        Args:
+            df (pd.DataFrame): DataFrame to process.
+            column_name (str): Name of the column to convert.
+        Returns:
+            pd.DataFrame: DataFrame with converted column.
+        """
         for index, value in df[column_name].items():
             if isinstance(value, str):
                 try:
@@ -495,12 +657,14 @@ class DecayDatabaseManager:
         return df
 
 
-
-
-    
-
-
-def load_decay_database(data_source='ENDF-B-VIII.1_decay'):
+def load_decay_database(data_source: str = 'ENDF-B-VIII.1_decay') -> DecayDatabase:
+    """
+    Load a DecayDatabase object from a compressed NumPy file for the specified data source.
+    Args:
+        data_source (str): Name of the decay data source.
+    Returns:
+        DecayDatabase: Loaded decay database object.
+    """
     # DecayDatabaseManager(data_source).save_decay_database()
 
     database = np.load(
@@ -526,27 +690,3 @@ def load_decay_database(data_source='ENDF-B-VIII.1_decay'):
         decay_energies_data
     )
 
-
-
-# def gen_decay_database():
-#     df = pd.read_json(self.data_path.joinpath(f'{self.data_source}.json'), orient='records')
-#     df = self._sort_algorithm(df)
-    
-#     (
-#         nuclides,
-#         half_life_data,
-#         decay_modes_data,
-#         progeny_data,
-#         branching_ratios_data,
-#         decay_energies_data
-#     ) = self._process_radionuclide_data(df)
-
-#     return DecayDatabase(
-#         self.data_source,
-#         nuclides,
-#         half_life_data,
-#         decay_modes_data,
-#         progeny_data,
-#         branching_ratios_data,
-#         decay_energies_data
-#     )
