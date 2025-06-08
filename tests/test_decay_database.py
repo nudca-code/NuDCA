@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from nudca.decay_database import DecayDatabase, DecayDatabaseManager, load_decay_database
+from nudca.decay_network import DecayDatabase, DecayDatabaseManager, load_decay_database
 from nudca.nuclide import NuclideStrError
 
 

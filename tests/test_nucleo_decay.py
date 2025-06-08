@@ -17,57 +17,60 @@ from nudca.io import get_sorted_Y, filter_Y, group_and_sum
 from nudca.kilonovae.lightcurve import KNeLightCurve
 
 
-t0 = time.perf_counter()
+t_start = time.perf_counter()
 
 #-----------------------------------------------------------------------------------------------------
-traj_path = '/media/yolo/CQH/Data/WinNet_v1.1.6/CCSNe/Wang/model_9.5/traj_135937'
-# traj_path = 'G:/Data/WinNet_v1.1.6/CCSNe/Wang/model_9.5/traj_135937'
+# traj_path = '/media/yolo/CQH/Data/WinNet_v1.1.6/CCSNe/Wang/model_9.5/traj_135937'
+# # traj_path = 'G:/Data/WinNet_v1.1.6/CCSNe/Wang/model_9.5/traj_135937'
 
-def get_Y(traj_path):
-    with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
-        time = np.array(h5file['snapshots/time'])
-        A_snap = np.array(h5file['snapshots/A'])
-        Z_snap = np.array(h5file['snapshots/Z'])
-        Y_snap = np.array(h5file['snapshots/Y'])
+# def get_Y(traj_path):
+#     with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
+#         time = np.array(h5file['snapshots/time'])
+#         A_snap = np.array(h5file['snapshots/A'])
+#         Z_snap = np.array(h5file['snapshots/Z'])
+#         Y_snap = np.array(h5file['snapshots/Y'])
         
-    return time, Y_snap, A_snap, Z_snap
+#     return time, Y_snap, A_snap, Z_snap
 
 
-def get_heating_rate(traj_path):
-    with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
-        time = np.array(h5file['energy/time'])
-        heating_rate = np.array(h5file['energy/engen_tot'])
-    return time, heating_rate
+# def get_heating_rate(traj_path):
+#     with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
+#         time = np.array(h5file['energy/time'])
+#         heating_rate = np.array(h5file['energy/engen_tot'])
+#     return time, heating_rate
 
 
 
-def get_nuclide_Y(nuclide, A, Z, Y):
-    A_nuclide = Nuclide(nuclide).A
-    Z_nuclide = Nuclide(nuclide).Z
-    mask = (A==A_nuclide) & (Z==Z_nuclide)
-    Y_nuclide = np.array([Y_snap[mask][0] for Y_snap in Y])
+# def get_nuclide_Y(nuclide, A, Z, Y):
+#     A_nuclide = Nuclide(nuclide).A
+#     Z_nuclide = Nuclide(nuclide).Z
+#     mask = (A==A_nuclide) & (Z==Z_nuclide)
+#     Y_nuclide = np.array([Y_snap[mask][0] for Y_snap in Y])
     
-    return Y_nuclide
+#     return Y_nuclide
 
 
-decay_database = load_decay_database()
-decay_matrix = load_decay_matrix()
+# decay_database = load_decay_database()
+# decay_matrix = load_decay_matrix()
 
-index = 220
-time, Y_snap, A_snap, Z_snap = get_Y(traj_path)
-Y_ini_dict = filter_Y(Z_snap, A_snap, Y_snap[index, :])
+# index = 220
+# t_snap, Y_snap, A_snap, Z_snap = get_Y(traj_path)
+# Y_ini_dict = filter_Y(Z_snap, A_snap, Y_snap[index, :])
 
-decay_times = time[index:]
-radioactive_decay = RadioactiveDecay(Y_ini_dict, decay_database, decay_matrix)
+# decay_times = t_snap[index:]
+# radioactive_decay = RadioactiveDecay(Y_ini_dict, decay_database, decay_matrix)
 
-t, q_dot = get_heating_rate(traj_path)
-heating_rate_table = (np.array(t[index:-1]), np.array(q_dot[index:-1]))
+# t, q_dot = get_heating_rate(traj_path)
+# heating_rate_table = (np.array(t[index:-1]), np.array(q_dot[index:-1]))
 
-q_EM = radioactive_decay.heating_rates_by_type(decay_times, 'EM')
-q_LP = radioactive_decay.heating_rates_by_type(decay_times, 'LP')
-q_HP = radioactive_decay.heating_rates_by_type(decay_times, 'HP')
-q = radioactive_decay.decay_heating_rates(decay_times)
-# heating_rate_decay = (np.array(decay_times), np.array(q))
+# q_EM = radioactive_decay.heating_rates_by_type(decay_times, 'EM')
+# q_LP = radioactive_decay.heating_rates_by_type(decay_times, 'LP')
+# q_HP = radioactive_decay.heating_rates_by_type(decay_times, 'HP')
+# q = radioactive_decay.decay_heating_rates(decay_times)
+# # heating_rate_decay = (np.array(decay_times), np.array(q))
+
+# t_end = time.perf_counter()
+# print(f"Time taken: {t_end - t_start} seconds")
 
 
 # times = np.geomspace(1.e-4, 1e2, 5000) * 86400  # days
@@ -119,22 +122,22 @@ q = radioactive_decay.decay_heating_rates(decay_times)
 
 
 
-fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+# fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
 
-ax.plot(decay_times/86400, q_EM, ls='-.', label='Electromagnetic')
-ax.plot(decay_times/86400, q_LP, ls='-.', label='Light particle')
-# ax.plot(decay_times/86400, q_HP, ls='--', label=r'HP ($\alpha$-decay)')
-ax.plot(decay_times/86400, q, ls='-', lw=2, label='NuDCA')
-ax.plot(t/86400, q_dot, ls='--', lw=2, label='WinNet')
-ax.set_xlim(1.e-2, 1.e2)
-ax.set_ylim(1e6, 1e12)
-ax.set_xscale('log')
-ax.set_yscale('log')
-ax.set_xlabel('Time [days]', fontsize=14)
-ax.set_ylabel('Radioactive heating rate [erg / g / s]', fontsize=14)
+# ax.plot(decay_times/86400, q_EM, ls='-.', label='Electromagnetic')
+# ax.plot(decay_times/86400, q_LP, ls='-.', label='Light particle')
+# # ax.plot(decay_times/86400, q_HP, ls='--', label=r'HP ($\alpha$-decay)')
+# ax.plot(decay_times/86400, q, ls='-', lw=2, label='NuDCA')
+# ax.plot(t/86400, q_dot, ls='--', lw=2, label='WinNet')
+# ax.set_xlim(1.e-2, 1.e2)
+# ax.set_ylim(1e6, 1e12)
+# ax.set_xscale('log')
+# ax.set_yscale('log')
+# ax.set_xlabel('Time [days]', fontsize=14)
+# ax.set_ylabel('Radioactive heating rate [erg / g / s]', fontsize=14)
 
-ax.legend(ncol=2, fontsize=12)
-plt.show()
+# ax.legend(ncol=2, fontsize=12)
+# plt.show()
 
 
 #-----------------------------------------------------------------------------------------------------
@@ -142,69 +145,68 @@ plt.show()
 # traj_path_skynet = '/media/yolo/CQH/Data/RadioactiveDecay/SkyNet/DD2_M13501350_M0'
 # traj_path_winnet = '/media/yolo/CQH/Data/RadioactiveDecay/WinNet/DD2_M13501350_M0'
 
-
-# traj_path_skynet = 'G:/Data/RadioactiveDecay/SkyNet/DD2_M13501350_M0'
+traj_path_skynet = 'G:/Data/SkyNet_MKL/Ye0.2_s24.0_tau0.008'
 # traj_path_winnet = 'G:/Data/RadioactiveDecay/WinNet/DD2_M13501350_M0'
 
-# def get_Y_SkyNet(traj_path):
-#     with h5py.File(os.path.join(traj_path, 'skynet_output.h5'), 'r') as h5file:
-#         time = np.array(h5file['Time'])
-#         A_snap = np.array(h5file['A'])
-#         Z_snap = np.array(h5file['Z'])
-#         Y_snap = np.array(h5file['Y'])
+def get_Y_SkyNet(traj_path):
+    with h5py.File(os.path.join(traj_path, 'skynet_output.h5'), 'r') as h5file:
+        time = np.array(h5file['Time'])
+        A_snap = np.array(h5file['A'])
+        Z_snap = np.array(h5file['Z'])
+        Y_snap = np.array(h5file['Y'])
         
-#     return time, Y_snap, A_snap, Z_snap
+    return time, Y_snap, A_snap, Z_snap
 
 
-# def get_heating_rate_SkyNet(traj_path):
-#     with h5py.File(os.path.join(traj_path, 'skynet_output.h5'), 'r') as h5file:
-#         time = np.array(h5file['Time'])
-#         heating_rate = np.array(h5file['HeatingRate'])
-#     return time, heating_rate
+def get_heating_rate_SkyNet(traj_path):
+    with h5py.File(os.path.join(traj_path, 'skynet_output.h5'), 'r') as h5file:
+        time = np.array(h5file['Time'])
+        heating_rate = np.array(h5file['HeatingRate'])
+    return time, heating_rate
 
 
-# def get_Y_WinNet(traj_path):
-#     with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
-#         time = np.array(h5file['snapshots/time'])
-#         A_snap = np.array(h5file['snapshots/A'])
-#         Z_snap = np.array(h5file['snapshots/Z'])
-#         Y_snap = np.array(h5file['snapshots/Y'])
+def get_Y_WinNet(traj_path):
+    with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
+        time = np.array(h5file['snapshots/time'])
+        A_snap = np.array(h5file['snapshots/A'])
+        Z_snap = np.array(h5file['snapshots/Z'])
+        Y_snap = np.array(h5file['snapshots/Y'])
         
-#     return time, Y_snap, A_snap, Z_snap
+    return time, Y_snap, A_snap, Z_snap
 
 
-# def get_heating_rate_WinNet(traj_path):
-#     with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
-#         time = np.array(h5file['energy/time'])
-#         heating_rate_tot = np.array(h5file['energy/engen_tot'])
-#         heating_rate_beta = np.array(h5file['energy/engen_beta'])
-#         heating_rate_fiss = np.array(h5file['energy/engen_fiss'])
+def get_heating_rate_WinNet(traj_path):
+    with h5py.File(os.path.join(traj_path, 'WinNet_data.h5'), 'r') as h5file:
+        time = np.array(h5file['energy/time'])
+        heating_rate_tot = np.array(h5file['energy/engen_tot'])
+        heating_rate_beta = np.array(h5file['energy/engen_beta'])
+        heating_rate_fiss = np.array(h5file['energy/engen_fiss'])
         
         
-#     return time, heating_rate_tot, heating_rate_beta, heating_rate_fiss
+    return time, heating_rate_tot, heating_rate_beta, heating_rate_fiss
 
 
-# def get_nuclide_Y(nuclide, A, Z, Y):
-#     A_nuclide = Nuclide(nuclide).A
-#     Z_nuclide = Nuclide(nuclide).Z
-#     mask = (A==A_nuclide) & (Z==Z_nuclide)
-#     Y_nuclide = np.array([Y_snap[mask][0] for Y_snap in Y])
+def get_nuclide_Y(nuclide, A, Z, Y):
+    A_nuclide = Nuclide(nuclide).A
+    Z_nuclide = Nuclide(nuclide).Z
+    mask = (A==A_nuclide) & (Z==Z_nuclide)
+    Y_nuclide = np.array([Y_snap[mask][0] for Y_snap in Y])
     
-#     return Y_nuclide
+    return Y_nuclide
 
-# decay_database = load_decay_database()
-# decay_matrix = load_decay_matrix()
+decay_database = load_decay_database()
+decay_matrix = load_decay_matrix()
 
-# index = 545
-# # time, Y_snap, A_snap, Z_snap = get_Y_SkyNet(traj_path_skynet)
-# time, Y_snap, A_snap, Z_snap = get_Y_WinNet(traj_path_winnet)
+index = 2035
+t_snap, Y_snap, A_snap, Z_snap = get_Y_SkyNet(traj_path_skynet)
+# t_snap, Y_snap, A_snap, Z_snap = get_Y_WinNet(traj_path_winnet)
 
-# Y_ini_dict = filter_Y(Z_snap, A_snap, Y_snap[index, :])
+Y_ini_dict = filter_Y(Z_snap, A_snap, Y_snap[index, :])
 
-# decay_times = time[index:] - time[index]
-# radioactive_decay = RadioactiveDecay(Y_ini_dict, decay_database, decay_matrix)
+decay_times = t_snap[index:] - t_snap[index]
+radioactive_decay = RadioactiveDecay(Y_ini_dict, decay_database, decay_matrix)
 
-# t_skynet, q_dot_skynet = get_heating_rate_SkyNet(traj_path_skynet)
+t_skynet, q_dot_skynet = get_heating_rate_SkyNet(traj_path_skynet)
 
 # (
 #     t_winnet,
@@ -214,12 +216,13 @@ plt.show()
 # ) = get_heating_rate_WinNet(traj_path_winnet)
 
 
-# q_EM = radioactive_decay.heating_rates_by_type(decay_times, 'EM')
-# q_LP = radioactive_decay.heating_rates_by_type(decay_times, 'LP')
-# # q_HP = radioactive_decay.heating_rates_by_type(decay_times, 'HP')
-# q = radioactive_decay.decay_heating_rates(decay_times)
+q_EM = radioactive_decay.decay_heating_rates(decay_times, energy_type='EM')
+q_LP = radioactive_decay.decay_heating_rates(decay_times, energy_type='LP')
+q_HP = radioactive_decay.decay_heating_rates(decay_times, energy_type='HP')
+q = radioactive_decay.decay_heating_rates(decay_times)
 
-
+t_end = time.perf_counter()
+print(f"Time taken: {t_end - t_start} seconds")
 
 # heating_rate_decay = (np.array(decay_times), np.array(q))
 
@@ -273,28 +276,27 @@ plt.show()
 # plt.show()
 
 
+fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
 
-# fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+t_decay = decay_times + t_snap[index]
 
-# t_decay = decay_times + time[index]
-
-# ax.plot(t_decay/86400, q_EM, ls='-.', label=r'$\gamma$')
-# ax.plot(t_decay/86400, q_LP, ls='-.', label=r'$e^{-}$')
-# # ax.plot(t_decay/86400, q_HP, ls='--', label=r'$\alpha$')
-# ax.plot(t_decay/86400, q, ls='-', color='b', lw=2, label='NuDCA')
-# # ax.plot(t_skynet/86400, q_dot_skynet, label='SkyNet')
+ax.plot(t_decay/86400, q_EM, ls='-.', label=r'$\gamma$')
+ax.plot(t_decay/86400, q_LP, ls='-.', label=r'$e^{-}$')
+ax.plot(t_decay/86400, q_HP, ls='--', label=r'$\alpha$')
+ax.plot(t_decay/86400, q, ls='-', color='b', lw=2, label='NuDCA')
+ax.plot(t_skynet/86400, q_dot_skynet, label='SkyNet')
 # ax.plot(t_winnet/86400, q_tot_winnet, ls='--', lw=2, color='r', label='WinNet')
-# # ax.plot(t_winnet/86400, q_beta_winnet, ls=':', label='WinNet (beta)')
-# # ax.plot(t_winnet/86400, q_fiss_winnet, ls=':', label='WinNet (fission)')
-# ax.set_xlim(1.e-2, 1.e2)
-# ax.set_ylim(1e6, 1e14)
-# ax.set_xscale('log')
-# ax.set_yscale('log')
-# ax.set_xlabel('Time [days]', fontsize=14)
-# ax.set_ylabel('Radioactive heating rate [erg / g / s]', fontsize=14)
+# ax.plot(t_winnet/86400, q_beta_winnet, ls=':', label='WinNet (beta)')
+# ax.plot(t_winnet/86400, q_fiss_winnet, ls=':', label='WinNet (fission)')
+ax.set_xlim(1.e-2, 1.e2)
+ax.set_ylim(1e6, 1e14)
+ax.set_xscale('log')
+ax.set_yscale('log')
+ax.set_xlabel('Time [days]', fontsize=14)
+ax.set_ylabel('Radioactive heating rate [erg / g / s]', fontsize=14)
 
-# ax.legend(ncol=2, fontsize=12)
-# plt.show()
+ax.legend(ncol=2, fontsize=12)
+plt.show()
 
 
 

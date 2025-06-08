@@ -1,5 +1,7 @@
-import numpy as np
+
 from typing import List, Tuple, Union, Optional
+
+import numpy as np
 from scipy.interpolate import interp1d, RegularGridInterpolator
 
 from nudca.constants import DAY_CGS, IPI

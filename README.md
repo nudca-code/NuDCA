@@ -2,9 +2,15 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen)](https://nudca.readthedocs.io/)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen)](https://nudca-code.github.io/nudca.github.io/)
 
-NuDCA is a powerful scientific computing library for nuclear decay and kilonovae research. It provides comprehensive tools for analyzing radioactive decay chains, calculating decay matrices, and simulating kilonovae phenomena.
+`NuDCA` is an open-source Python program specifically designed for calculating the decay chains of radioactive nuclides. We have developed a versatile computational framework that efficiently handles decay chains with complex branching ratios. This framework employs a matrix-based numerical solving method, ensuring both analytical accuracy and computational efficiency, enabling rapid resolution of decay chain differential equations.
+
+The primary goal of `NuDCA` is to provide researchers with a flexible and reliable tool for simulating the accumulation, decay, and associated physical phenomena of radioactive nuclides. The program supports a wide range of complex scenarios, including the splitting and merging of multi-branch decay chains and the superposition of various decay modes. This flexibility makes it invaluable across fields such as nuclear science, geochronology, and astrophysics. As an open-source Python-based software, `NuDCA` offers excellent extensibility, allowing researchers to easily customize its functionality to meet specific requirements.
+
+In extreme astrophysical environments like core-collapse supernovae (CCSN) and neutron star mergers (NSM), significant energy is released through radioactive decay, powering transient phenomena such as supernovae (SN) and kilonovae (KN). To address the needs of this research area, `NuDCA` features a specialized module for calculating the light curves of kilonovae. This capability provides critical support for studying the synthesis of r-process elements, the physical properties of ejecta, and the radiation characteristics of kilonovae.
+
+Furthermore, the development of `NuDCA` emphasizes user experience and community collaboration. With its intuitive interface and comprehensive documentation, even beginners can quickly start using the program. As an open-source project, `NuDCA` fosters collaboration between academia and industry, aiming to drive technological advancements and scientific research, establishing itself as a benchmark tool in the field of radioactive decay simulation.
 
 ## Features
 
@@ -32,35 +38,11 @@ NuDCA is a powerful scientific computing library for nuclear decay and kilonovae
 pip install nudca
 ```
 
-## Quick Start
-
-```python
-from nudca import DecayDatabase, DecayMatrix
-
-# Load decay database
-db = DecayDatabase('ENDF-B-VIII.1_decay')
-
-# Get nuclide information
-half_life = db.half_life('U-238')
-progeny = db.progeny('U-238')
-decay_energy = db.decay_energy('U-238', 'EM')
-
-
-# Plot nuclear chart
-db.plot_nuclear_chart(
-    min_half_life=1.0,
-    max_half_life=1e10,
-    cmap='viridis'
-)
-```
-
 ## Documentation
 
-For detailed documentation, please visit our [documentation site](https://nudca.readthedocs.io/).
+For detailed documentation, please visit our [documentation site](https://nudca-code.github.io/nudca.github.io/).
 
-## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## Citation
 
@@ -72,13 +54,9 @@ If you use NuDCA in your research, please cite:
   title = {NuDCA: A Numerical Code for Nuclear Decay Chains in Astrophysics},
   year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/QiuhongChen/NuDCA.git}
+  url = {https://github.com/nudca-code/NuDCA.git}
 }
 ```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

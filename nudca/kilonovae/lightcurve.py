@@ -1,6 +1,7 @@
 import sys
-import numpy as np
 from typing import Tuple, Optional, Union
+
+import numpy as np
 from scipy.integrate import solve_ivp
 
 from .geometry import Geometry

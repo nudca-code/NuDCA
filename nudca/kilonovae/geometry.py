@@ -1,7 +1,7 @@
-
 from typing import Tuple, List, Optional, Union
 
 import numpy as np
+from numba import njit
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 
@@ -432,8 +432,6 @@ class Geometry:
         """
         return np.array([self.density_profile.density_distribution(time, velocity) for velocity in vel_shells])
     
-    
- 
     # def mass_shells(
     #     self,
     #     times: Union[float, np.ndarray],
@@ -557,10 +555,4 @@ class Geometry:
 
         return radius_photon    
 
-    
-
-    
-    
-
-    
 
