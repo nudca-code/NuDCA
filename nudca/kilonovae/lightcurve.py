@@ -180,9 +180,9 @@ class KNeLightCurve:
         effective_heating_rate = EffectiveHeatingRate(
             thermal_scheme=self.thermal_scheme,
             heating_scheme=self.heating_scheme,
+            heating_rate_data = self.heating_rate_data,
             mass_ejecta=self.mass_ejecta,
-            vel_ejecta=self.vel_ejecta,
-            heating_rate_data = self.heating_rate_data
+            vel_ejecta=self.vel_ejecta
         )(times)
 
         return mass_shells * effective_heating_rate - E_shells / times - Lbol_shells

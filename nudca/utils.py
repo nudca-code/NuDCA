@@ -28,6 +28,7 @@ DECAY_ENERGY_EM_LABEL         = 'Decay_Energy_EM'
 DECAY_ENERGY_LP_LABEL         = 'Decay_Energy_LP'
 DECAY_ENERGY_HP_LABEL         = 'Decay_Energy_HP'
 DECAY_ENERGY_NEUTRINO_LABEL   = 'Decay_Energy_Neutrino'
+DECAY_ENERGY_SF_LABEL         = 'Decay_Energy_SF'
 DECAY_ENERGY_GAMMA_LABEL      = 'Decay_Energy_Gamma'
 DECAY_ENERGY_BETA_MINUS_LABEL = 'Decay_Energy_Beta_Minus'
 DECAY_ENERGY_BETA_PLUS_LABEL  = 'Decay_Energy_Beta_Plus'
@@ -88,16 +89,16 @@ class DecayDatabaseManager:
         )
         decay_energies_data = np.array([
             (
-                decay_energy_EM, decay_energy_LP, decay_energy_HP, decay_energy_neutrino,
+                decay_energy_EM, decay_energy_LP, decay_energy_HP, decay_energy_neutrino, decay_energy_SF,
                 decay_energy_gamma, decay_energy_beta_minus, decay_energy_beta_plus,
                 decay_energy_alpha, decay_energy_neutron, decay_energy_proton, decay_effective_q
             )
-            for decay_energy_EM, decay_energy_LP, decay_energy_HP, decay_energy_neutrino,
+            for decay_energy_EM, decay_energy_LP, decay_energy_HP, decay_energy_neutrino, decay_energy_SF,
                 decay_energy_gamma, decay_energy_beta_minus, decay_energy_beta_plus,
                 decay_energy_alpha, decay_energy_neutron, decay_energy_proton, decay_effective_q
             in zip(
                 df[DECAY_ENERGY_EM_LABEL], df[DECAY_ENERGY_LP_LABEL], df[DECAY_ENERGY_HP_LABEL],
-                df[DECAY_ENERGY_NEUTRINO_LABEL], df[DECAY_ENERGY_GAMMA_LABEL],
+                df[DECAY_ENERGY_NEUTRINO_LABEL], df[DECAY_ENERGY_SF_LABEL], df[DECAY_ENERGY_GAMMA_LABEL],
                 df[DECAY_ENERGY_BETA_MINUS_LABEL], df[DECAY_ENERGY_BETA_PLUS_LABEL],
                 df[DECAY_ENERGY_ALPHA_LABEL], df[DECAY_ENERGY_NEUTRON_LABEL],
                 df[DECAY_ENERGY_PROTON_LABEL], df[DECAY_EFFECTIVE_Q_LABEL]
@@ -119,11 +120,13 @@ class DecayDatabaseManager:
                 branching_ratios = branching_ratios_list[i][:num_decay_modes]
                 decay_modes = decay_modes_list[i][:num_decay_modes]
                 # Sort decay modes by branching ratio (descending), then progeny, then mode
-                sorted_triples = sorted(
-                    zip(branching_ratios, progeny, decay_modes),
-                    key=lambda x: (-x[0], x[1], x[2])
-                )
-                branching_ratios_data[i], progeny_data[i], decay_modes_data[i] = map(list, zip(*sorted_triples))
+                # sorted_triples = sorted(
+                #     zip(branching_ratios, progeny, decay_modes),
+                #     key=lambda x: (-x[0], x[1], x[2])
+                # )
+                # branching_ratios_data[i], progeny_data[i], decay_modes_data[i] = map(list, zip(*sorted_triples))
+                
+                branching_ratios_data[i], progeny_data[i], decay_modes_data[i] = branching_ratios, progeny, decay_modes
         database = (
             nuclides,
             half_life_data,
@@ -160,7 +163,8 @@ class DecayDatabaseManager:
         return final_df
 
 
-    def parse_string_to_list(self, df: pd.DataFrame, column_name: str) -> pd.DataFrame:
+    @staticmethod
+    def parse_string_to_list(df: pd.DataFrame, column_name: str) -> pd.DataFrame:
         """
         Convert string representations of lists in a DataFrame column to actual Python lists.
         Args:

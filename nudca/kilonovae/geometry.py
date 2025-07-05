@@ -195,8 +195,6 @@ class DensityProfile:
   
 
 
-
-
 class VelocityProfile:
     """
     A class for modeling velocity profiles of ejecta in astrophysical phenomena.

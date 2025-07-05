@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-
 """
 Radioactive decay simulation module for nuclear astrophysics calculations.
 Provides tools for modeling radioactive decay processes, calculating heating rates,
 and managing nuclide abundances in nuclear decay networks.
 """
-
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
-import pandas as pd
 from numba import njit
 import matplotlib.pyplot as plt
 
@@ -132,8 +129,8 @@ class RadioactiveDecay:
         Note:
             Efficiently computes abundances for all nuclides at all time points using matrix operations.
         """
-        nuclide_names, abundances = self.decay_process(decay_times)
-        return nuclide_names, abundances
+        nuclide_symbols, decay_abundances = self.decay_process(decay_times)
+        return nuclide_symbols, decay_abundances
 
     
     def decay_heating_rates(
@@ -154,17 +151,36 @@ class RadioactiveDecay:
             Heating rates are calculated using the Bateman equations and include
             contributions from all relevant decay channels.
         """
-        nuclide_names, abundances = self.decay_process(decay_times)
-        indices = np.array([self.decay_database.nuclide_index_map[n] for n in nuclide_names])
-        return self._heating_rates(abundances, indices, energy_type)
+        nuclide_symbols, decay_abundances = self.decay_process(decay_times)
+        indices = np.array([self.decay_database.nuclide_index_map[nuclide] for nuclide in nuclide_symbols])
+        return self._heating_rates(decay_abundances, indices, energy_type)
     
-
+    
+    def total_decay_heating_rates(
+        self,
+        decay_times: Union[float, np.ndarray]
+    ) -> np.ndarray:
+        """
+        Calculate total decay heating rates from radioactive decay at specified time points.
+        """
+        heating_rates = self.decay_heating_rates(decay_times)
+        return np.sum(heating_rates, axis=1)
+        
+    
     def decay_process(
         self,
         decay_times: Union[float, np.ndarray]
     ) -> Tuple[List[str], np.ndarray]:
         """
         Compute nuclide abundance evolution using matrix operations (Bateman equations).
+        
+        Formula:
+            N(t) = P * D * P_inv * N(0)
+        where:
+            P = transition probability matrix
+            D = exp(-Lambda * t) = matrix of decay constants
+            P_inv = inverse of transition probability matrix
+            N(0) = initial nuclide abundances
         
         Handles:
         - Initial condition setup
@@ -190,38 +206,33 @@ class RadioactiveDecay:
         
         initial_abundance = self.decay_matrix.initial_abundance.copy()
         relevant_indices_set = set()
+        
         for nuclide, quantity in self.initial_abundance.items():
             nuclide = self._validate_nuclide(nuclide)
             index = self.decay_database.nuclide_index_map[nuclide]
             initial_abundance[index] = quantity
             relevant_indices_set.add(index)
             relevant_indices_set.update(self.decay_matrix.matrix_P[:, index].nonzero()[0])
+
         relevant_indices = np.array(sorted(list(relevant_indices_set)), dtype=int)
-        matrix_P = self.decay_matrix.matrix_P
-        matrix_P_inv = self.decay_matrix.matrix_P_inv
-        decay_constants = self.decay_matrix.decay_constants
-        exp_factors = np.exp(-np.outer(decay_times, decay_constants[relevant_indices]))  # (n_times, n_indices)
-        matrix_Lambda_base = self.decay_matrix.matrix_Lambda.copy()
-        abundance_array = np.zeros((len(decay_times), len(relevant_indices)))
-        for i, exp_row in enumerate(exp_factors):
-            matrix_Lambda = matrix_Lambda_base.copy()
-            matrix_Lambda.data[relevant_indices] = exp_row
-            try:
-                abundance_array[i] = (
-                    matrix_P
-                    .dot(matrix_Lambda)
-                    .dot(matrix_P_inv)
-                    .dot(initial_abundance)
-                )[relevant_indices]
-            except Exception as e:
-                raise RuntimeError(
-                    f"Error in abundance calculation at time index {i}: {e}\n"
-                    f"Input: decay_times={decay_times}, relevant_indices={relevant_indices}"
-                )
-            
+        matrix_P = self.decay_matrix.matrix_P.copy()
+        matrix_P_inv = self.decay_matrix.matrix_P_inv.copy()
+        decay_constants = self.decay_matrix.decay_constants.copy()
+        
+        # N(t) = P * D * P_inv * N(0)
+        matrix_P = matrix_P[relevant_indices, :][:, relevant_indices].toarray()  # (n_indices, n_indices)
+        matrix_D = np.exp(-np.outer(decay_times, decay_constants[relevant_indices]))  # (n_times, n_indices)
+        matrix_P_inv = matrix_P_inv[relevant_indices, :][:, relevant_indices].toarray()  # (n_indices, n_indices)
+        initial_abundances = initial_abundance[relevant_indices]  # (n_indices,)  
+        decay_abundances = (
+            matrix_P @ (
+                matrix_D * (matrix_P_inv @ initial_abundances)
+            ).T
+        ).T  # (n_times, n_indices)
+
         return (
             [self.decay_database.nuclides[index] for index in relevant_indices],
-            abundance_array
+            decay_abundances 
         )
 
 
@@ -325,12 +336,12 @@ class RadioactiveDecay:
         decay_energies = np.asarray(decay_energies, dtype=np.float64)
         return calculate_radioactive_heating_rates(decay_constants, abundances, decay_energies)
 
- 
+
 
 @njit(cache=True)
 def calculate_radioactive_heating_rates(
     decay_constants: np.ndarray,
-    abundances: np.ndarray,
+    decay_abundances: np.ndarray,
     decay_energies: np.ndarray
 ) -> np.ndarray:
     """
@@ -349,7 +360,7 @@ def calculate_radioactive_heating_rates(
         E = decay energy
     Args:
         decay_constants (np.ndarray): Array of decay constants for each nuclide [s^-1].
-        abundances (np.ndarray): 2D array of nuclide abundances [mol], shape (n_times, n_nuclides).
+        decay_abundances (np.ndarray): 2D array of nuclide abundances, shape (n_times, n_nuclides).
         decay_energies (np.ndarray): Array of decay energies for each nuclide [eV].
     Returns:
         np.ndarray: Array of heating rates at each time point [erg/s].
@@ -359,20 +370,16 @@ def calculate_radioactive_heating_rates(
         - Result includes unit conversions from eV to erg using EV_CGS constant.
         - Assumes all input arrays are properly aligned.
     """
-    n_times = abundances.shape[0]
-    n_nuclides = abundances.shape[1]
-    heating_rates = np.zeros(n_times)
-    for t in range(n_times):
-        for i in range(n_nuclides):
+    n_times = decay_abundances.shape[0]
+    n_nuclides = decay_abundances.shape[1]
+    heating_rates = np.zeros((n_times, n_nuclides))
+    for i in range(n_times):
+        for j in range(n_nuclides):
             if (
-                not np.isfinite(decay_constants[i]) or
-                np.isnan(abundances[t, i]) or
-                np.isnan(decay_energies[i])
+                not np.isfinite(decay_constants[j]) or
+                np.isnan(decay_abundances[i, j]) or
+                np.isnan(decay_energies[j])
             ):
                 continue
-            heating_rates[t] += NA_CGS * decay_constants[i] * abundances[t, i] * decay_energies[i] * EV_CGS
+            heating_rates[i, j] = NA_CGS * decay_constants[j] * decay_abundances[i, j] * decay_energies[j] * EV_CGS 
     return heating_rates
-
-
-
-

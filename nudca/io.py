@@ -35,8 +35,7 @@ import scipy.sparse as sparse
 from .decay_network import (
     DecayDatabase,
     DecayMatrix,
-    MatrixBuilder,
-    DecayDiagram
+    MatrixBuilder
 )
 from .utils import DecayDatabaseManager
 from .nuclide import Nuclide, Z_to_element
@@ -223,8 +222,8 @@ class AbundanceEstimator:
                 decay_mode, _ = self.decay_database.get_decay_channel(parent, current)
                 if decay_mode in ['β+&EC', 'SF']:
                     continue
-                if self.decay_database.get_nuclide_half_life(parent, 's') < 1.0:
-                    continue
+                # if self.decay_database.get_nuclide_half_life(parent, 's') < 1.0:
+                #     continue
                 if (parent in self.decay_database.nuclide_index_map and 
                     np.isfinite(self.decay_database.get_nuclide_half_life(parent, 's'))):
                     valid_parents.append(parent)
@@ -303,9 +302,9 @@ class Inputer:
     Input utility for reading initial nuclide abundances from file.
     Supports CSV, TSV, Excel, and JSON formats.
     """
-    def __init__(self):
-        pass
-    
+    def __init__(self, decay_database: DecayDatabase):
+        self.decay_database = decay_database
+
     @staticmethod
     def extract_mass_number(nuclide):
         match = re.search(r'\d+', nuclide)
@@ -333,12 +332,19 @@ class Inputer:
 
     def filter_Y(self, Z, A, Y):
         nuclide_dict = self.to_dict(Z, A, Y)
-        decay_database = load_decay_database()
-        nuclides = decay_database.nuclides
+        nuclides = self.decay_database.nuclides
         common_nuclides = set(nuclide_dict.keys()) & set(nuclides)
         filtered_dict = {key: nuclide_dict[key] for key in common_nuclides}
         
         return filtered_dict
+    
+    
+    def filter_nuclide_abundance(self, nuclide_abundance: Dict[str, float]) -> Dict[str, float]:
+        nuclides = self.decay_database.nuclides
+        common_nuclides = set(nuclide_abundance.keys()) & set(nuclides)
+        filtered_dict = {key: nuclide_abundance[key] for key in common_nuclides}
+        return filtered_dict
+
 
 
 
@@ -346,18 +352,18 @@ class Inputer:
     def read_abundance(
         filename: Union[str, Path],
         filetype: Optional[str] = None,
-        atomic_number_col: str = "atomic number",
-        atomic_mass_col: str = "atomic mass",
-        abundance_col: str = "abundance"
+        atomic_number_col: str = "Z",
+        atomic_mass_col: str = "A",
+        abundance_col: str = "Y"
     ) -> Dict[str, float]:
         """
         Read initial nuclide abundances from file.
         Args:
             filename: Input file path.
-            filetype: 'csv', 'tsv', 'xlsx', or 'json'. If None, inferred from filename.
-            atomic_number_col: Column name for atomic number (default 'atomic number').
-            atomic_mass_col: Column name for atomic mass (default 'atomic mass').
-            abundance_col: Column name for abundance (default 'abundance').
+            filetype: 'csv', 'xlsx', or 'json'. If None, inferred from filename.
+            atomic_number_col: Column name for atomic number (default 'Z').
+            atomic_mass_col: Column name for atomic mass (default 'A').
+            abundance_col: Column name for abundance (default 'Y').
         Returns:
             Dict[str, float]: Mapping from nuclide symbol to abundance.
         """
@@ -365,8 +371,6 @@ class Inputer:
             filetype = str(filename).split('.')[-1].lower()
         if filetype == 'csv':
             df = pd.read_csv(filename)
-        elif filetype == 'tsv':
-            df = pd.read_csv(filename, sep='\t')
         elif filetype in ('xls', 'xlsx'):
             df = pd.read_excel(filename)
         elif filetype == 'json':
@@ -398,9 +402,19 @@ class Inputer:
         return nuclide_abundance
     
 
-
-
-
+    @staticmethod
+    def read_abundance_from_file(filename: Union[str, Path], filetype: Optional[str] = None) -> Dict[str, float]:
+        """
+        Read nuclide abundances from file.
+        Args:
+            filename: Input file path.
+            filetype: 'csv', 'xlsx', or 'json'. If None, inferred from filename.
+        Returns:
+            Dict[str, float]: Mapping from nuclide symbol to abundance.
+        """
+        pass
+            
+            
 
     def import_nuclide_abundance(self, filepath: str, fmt: str = 'csv') -> None:
         """

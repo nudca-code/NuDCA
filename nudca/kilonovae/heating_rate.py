@@ -18,11 +18,15 @@ class EffectiveHeatingRate(object):
                 thermal_scheme: str,
                 heating_scheme: str,
                 heating_rate_data: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                mass_ejecta: Optional[float] = None,
+                vel_ejecta: Optional[float] = None,
                 **kwargs):
         
         self.thermal_scheme = thermal_scheme
         self.heating_scheme = heating_scheme
         self.heating_rate_data = heating_rate_data
+        self.mass_ejecta = mass_ejecta
+        self.vel_ejecta = vel_ejecta
         self.kwargs = kwargs
     
     def __call__(self, times):
@@ -33,9 +37,14 @@ class EffectiveHeatingRate(object):
         times: Union[List[float], np.ndarray],
     ) -> Union[List[float], np.ndarray]:
         
-        thermal_efficiency = ThermalizationEfficiency(thermal_scheme=self.thermal_scheme, **self.kwargs)(times)
+        thermal_efficiency = ThermalizationEfficiency(thermal_scheme=self.thermal_scheme,
+                                                      mass_ejecta=self.mass_ejecta,
+                                                      vel_ejecta=self.vel_ejecta,
+                                                      **self.kwargs)(times)
         radioactive_heating_rate = RadioactiveHeatingRate(heating_scheme=self.heating_scheme,
                                                           heating_rate_data=self.heating_rate_data,
+                                                          vel_ejecta=self.vel_ejecta,
+                                                          
                                                           **self.kwargs)(times)
         return thermal_efficiency * radioactive_heating_rate
     

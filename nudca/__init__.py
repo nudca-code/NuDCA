@@ -17,7 +17,9 @@ from .nuclide import (
 from .decay_network import (
     DecayDatabase,
     DecayMatrix,
-    MatrixBuilder,
+    MatrixBuilder
+)
+from .plot import (
     DecayDiagram
 )
 from .decay_core import (

@@ -12,22 +12,13 @@ DecayMatrix:
 MatrixBuilder:
     - Builds the decay matrix and related structures for nuclide decay calculations.
 
-DecayDiagram:
-    - Visualizes nuclear decay chains and their reverse (parent) chains for a given nuclide.
-    - Provides methods to plot decay diagrams and nuclear charts using networkx and matplotlib.
 """
 
-from typing import Any, Dict, List, Tuple, Union, Optional
-from collections import deque
+from typing import Dict, List, Tuple, Union, Optional
 
 import numpy as np
-import networkx as nx
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 from scipy import sparse
-
 from .nuclide import Nuclide, NuclideStrError
-from .utils import HalfLifeColorMap
 
 
 #---------------------------------
@@ -243,13 +234,14 @@ class DecayDatabase:
             'LP':          1,
             'HP':          2,
             'Neutrino':    3,
-            'Gamma':       4,
-            'Beta_Minus':  5,
-            'Beta_Plus':   6,
-            'Alpha':       7,
-            'Neutron':     8,
-            'Proton':      9,
-            'Effective_Q': 10
+            'SF':          4,
+            'Gamma':       5,
+            'Beta_Minus':  6,
+            'Beta_Plus':   7,
+            'Alpha':       8,
+            'Neutron':     9,
+            'Proton':      10,
+            'Effective_Q': 11,
         }
         if energy_type not in energy_map:
             raise ValueError(f"Invalid energy type: {energy_type}. Use one of {list(energy_map.keys())}.")
@@ -378,11 +370,11 @@ class DecayMatrix:
         # Initial abundance vector (all zeros by default)
         self.initial_abundance = self._setup_initial_abundance(matrix_P.shape[0])
         # Diagonal matrix for decay constants (all zeros by default, can be set later)
-        self.matrix_Lambda = self._setup_matrix_Lambda(matrix_P.shape[0])
+        self.matrix_D = self._setup_matrix_D(matrix_P.shape[0])
         
 
     @staticmethod
-    def _setup_matrix_Lambda(size: int) -> sparse.csc_matrix:
+    def _setup_matrix_D(size: int) -> sparse.csc_matrix:
         """
         Creates a diagonal matrix of zeros (placeholder for decay constants).
         Args:
@@ -495,14 +487,13 @@ class MatrixBuilder:
         """
         Constructs the decay matrix A, which contains the decay constants for each nuclide.
         The matrix is built based on the decay constants derived from the half-lives of the nuclides,
-        decay modes, progeny nuclides, and branching ratios. Diagonal elements are negative total decay rates;
-        off-diagonal elements are positive and represent transfer to progeny.
+        decay modes, daughter nuclides, and branching ratios. Diagonal elements are negative total decay rates;
+        off-diagonal elements are positive and represent transfer to daughter.
         Returns:
             sparse.csc_matrix: Decay matrix A, where A[i, j] is the decay rate from nuclide j to i.
         """
         (
             half_life_data,
-            decay_modes_data,
             progeny_data,
             branching_ratios_data
         ) = self._get_decay_data()
@@ -518,17 +509,16 @@ class MatrixBuilder:
                 decay_constant = np.log(2) / half_life
             j = self.decay_database.nuclide_index_map[parent]
             matrix_A[j, j] = -decay_constant  # Diagonal: negative total decay rate
+            
             # Fill off-diagonal elements for each decay branch
-            for progeny, decay_mode, branching_ratio in zip(progeny_data[parent_index],
-                                                            decay_modes_data[parent_index],
-                                                            branching_ratios_data[parent_index]):
-                # Only consider physical decay modes (skip stable, SF, etc.)
-                if decay_mode in ['Stable', 'SF', 'Other', 'γ']:
+            daughter_nuclides = _flatten_list(progeny_data[parent_index])
+            branching_ratios = _flatten_list(branching_ratios_data[parent_index])
+            
+            for daughter, branching_ratio in zip(daughter_nuclides, branching_ratios):
+                if daughter not in self.decay_database.nuclides:
                     continue
-                if progeny not in self.decay_database.nuclides:
-                    continue
-                i = self.decay_database.nuclide_index_map[progeny]
-                matrix_A[i, j] = decay_constant * float(branching_ratio)  # Off-diagonal: decay to progeny
+                i = self.decay_database.nuclide_index_map[daughter]
+                matrix_A[i, j] = decay_constant * float(branching_ratio)  # Off-diagonal: decay to daughter
         return matrix_A.tocsc()
 
     def build_matrix_P(self, matrix_A: sparse.csc_matrix) -> sparse.csc_matrix:
@@ -611,7 +601,6 @@ class MatrixBuilder:
             tuple: (half_life_data, decay_modes_data, progeny_data, branching_ratios_data)
         """
         return (self.decay_database.half_life_data[:, 0],
-                self.decay_database.decay_modes_data,
                 self.decay_database.progeny_data,
                 self.decay_database.branching_ratios_data
             )
@@ -666,6 +655,22 @@ class MatrixBuilder:
             return False
 
 
+
+       
+def _flatten_list(data):
+    """
+    Flattens a list that contains a nested list as one of its elements.
+
+    """
+    new_list = []
+    for item in data:
+        if isinstance(item, list):
+            new_list.extend(item)
+        else:
+            new_list.append(item)
+    return np.array(new_list)
+
+
 def _csc_matrix_equal(matrix_a: sparse.csc_matrix,
                       matrix_b: sparse.csc_matrix) -> bool:
     """
@@ -684,693 +689,5 @@ def _csc_matrix_equal(matrix_a: sparse.csc_matrix,
     
     
 
-#---------------------------------
-#    class DecayDiagram
-#---------------------------------
-class DecayDiagram:
-    """
-    Visualizes nuclear decay chains and their reverse (parent) chains for a given nuclide.
-    Provides methods to plot decay diagrams and nuclear charts using networkx and matplotlib.
-    """
-
-    def __init__(self, decay_database):
-        """
-        Initialize the DecayDiagram with a decay database.
-        Args:
-            decay_database: An instance of DecayDatabase containing decay data.
-        """
-        self.decay_database = decay_database
-            
-    
-    def find_daughters(self, nuclide: str) -> List[str]:
-        """
-        Find all possible daughter nuclides that can be produced from the given nuclide.
-        Args:
-            nuclide (str): Parent nuclide symbol.
-        Returns:
-            list[str]: List of daughter nuclide symbols.
-        """
-        return self.decay_database.get_nuclide_progeny(nuclide)
-    
-
-    def find_parents(self, nuclide: str) -> List[str]:
-        """
-        Find all possible parent nuclides that can decay to the given nuclide.
-        Args:
-            nuclide (str): Daughter nuclide symbol.
-        Returns:
-            list[str]: List of parent nuclide symbols.
-        """
-        return self.decay_database.get_nuclide_ancestor(nuclide)
-
-    
-
-    def plot_nuclear_chart(
-        self,
-        figure: Optional[plt.figure] = None,
-        nuclei_linewidths: float = 0.3,
-        colorbar: bool = False,
-        figsize: Tuple[float, float] = (9, 6),
-        dpi: int = 300,
-        magic_numbers: List[int] = [2, 8, 20, 28, 50, 82, 126],
-        **kwargs
-    ) -> plt.figure:
-        """
-        Plot the nuclear chart (N vs Z) colored by half-life, with magic numbers highlighted.
-        Args:
-            figure (plt.figure, optional): Existing matplotlib figure to plot on.
-            nuclei_linewidths (float): Line width for nuclide boxes.
-            colorbar (bool): Whether to show colorbar.
-            figsize (Tuple[float, float]): Figure size.
-            dpi (int): Dots per inch for the figure.
-            magic_numbers (List[int]): List of magic numbers to highlight.
-            **kwargs: Additional keyword arguments for plotting.
-        Returns:
-            plt.figure: The matplotlib figure object.
-        Raises:
-            ValueError: If no valid nuclide or half-life data is available.
-        """
-
-        colormap = HalfLifeColorMap(self.decay_database.half_life_data)
-        
-        # Group nuclides by half-life ranges
-        range_groups = {key: [] for key in colormap.ranges.keys()}
-        stable_nuclides = []
-        
-        # Process nuclides and group them
-        for nuclide in self.decay_database.nuclides:
-            try:
-                parsed = Nuclide(nuclide)
-                Z = parsed.Z
-                N = parsed.N
-                state = parsed.state
-                if state:
-                    continue  # Skip metastable states
-                
-                half_life = self.decay_database.get_nuclide_half_life(nuclide, units="s")
-                
-                if half_life == float('inf'):
-                    stable_nuclides.append((N, Z))
-                else:
-                    range_key = colormap.get_range_for_half_life(half_life)
-                    if range_key:
-                        range_groups[range_key].append((N, Z, half_life))
-                    
-            except Exception:
-                continue
-
-        if not any(range_groups.values()) and not stable_nuclides:
-            raise ValueError("No valid nuclide data for plotting.")
-
-        # Create figure
-        fig, ax = colormap._create_figure(figure, figsize, dpi)
-        
-        # Plot stable nuclei
-        colormap._plot_stable_nuclei(ax, stable_nuclides, nuclei_linewidths)
-        
-        # Plot unstable nuclei by range
-        colormap._plot_unstable_nuclei(ax, range_groups, colormap, nuclei_linewidths)
-        
-        # Get all N and Z values for axis limits
-        all_N_values, all_Z_values = colormap._get_axis_limits(range_groups, stable_nuclides)
-        
-        # Mark magic numbers
-        colormap._mark_magic_numbers(ax, magic_numbers, range_groups, stable_nuclides)
-        
-        # Set axis limits and labels
-        colormap._set_axis_properties(ax, all_N_values, all_Z_values)
-
-        colormap._plot_legend(ax, range_groups, stable_nuclides)
-
-        return fig
-    
-
-    def plot_decay_chains(
-        self,
-        nuclide: str,
-        label_pos: float = 0.3,
-        fig: Optional[mpl.figure.Figure] = None,
-        axes: Optional[mpl.axes.Axes] = None,
-        kwargs_draw: Optional[Dict[str, Any]] = None,
-        kwargs_edge_labels: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-        """
-        Plot the decay chains starting from the specified nuclide.
-        Args:
-            nuclide (str): Starting nuclide symbol.
-            label_pos (float): Position of edge labels along the edge.
-            fig (Optional[Figure]): Existing matplotlib figure to plot on.
-            axes (Optional[Axes]): Existing matplotlib axes to plot on.
-            kwargs_draw (Optional[Dict]): Additional keyword arguments for nx.draw.
-            kwargs_edge_labels (Optional[Dict]): Additional keyword arguments for nx.draw_networkx_edge_labels.
-        Returns:
-            Tuple[Figure, Axes]: The matplotlib figure and axes objects.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        digraph, max_generation, max_xpos = self._build_decay_digraph(nuclide, nx.DiGraph())
-        return self.plot(
-            digraph,
-            max_generation,
-            max_xpos,
-            label_pos,
-            fig,
-            axes,
-            kwargs_draw,
-            kwargs_edge_labels,
-        )
-    
-
-    def plot_reverse_decay_chains(
-        self,
-        nuclide: str,
-        label_pos: float = 0.3,
-        fig: Optional[mpl.figure.Figure] = None,
-        axes: Optional[mpl.axes.Axes] = None,
-        kwargs_draw: Optional[Dict[str, Any]] = None,
-        kwargs_edge_labels: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-        """
-        Plot the reverse decay chains (parents) for the specified nuclide.
-        Args:
-            nuclide (str): Target nuclide symbol.
-            label_pos (float): Position of edge labels along the edge.
-            fig (Optional[Figure]): Existing matplotlib figure to plot on.
-            axes (Optional[Axes]): Existing matplotlib axes to plot on.
-            kwargs_draw (Optional[Dict]): Additional keyword arguments for nx.draw.
-            kwargs_edge_labels (Optional[Dict]): Additional keyword arguments for nx.draw_networkx_edge_labels.
-        Returns:
-            Tuple[Figure, Axes]: The matplotlib figure and axes objects.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        digraph, max_generation, max_xpos = self._build_reverse_decay_digraph(nuclide, nx.DiGraph())
-        return self.plot(
-            digraph,
-            max_generation,
-            max_xpos,
-            label_pos,
-            fig,
-            axes,
-            kwargs_draw,
-            kwargs_edge_labels,
-        )
-        
-    def plot_rProcess_chains(
-        self,
-        nuclide: str,
-        label_pos: float = 0.3,
-        fig: Optional[mpl.figure.Figure] = None,
-        axes: Optional[mpl.axes.Axes] = None,
-        kwargs_draw: Optional[Dict[str, Any]] = None,
-        kwargs_edge_labels: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-        """
-        Plot the r-process chains starting from the specified nuclide.
-        Args:
-            nuclide (str): Starting nuclide symbol.
-            label_pos (float): Position of edge labels along the edge.
-            fig (Optional[Figure]): Existing matplotlib figure to plot on.
-            axes (Optional[Axes]): Existing matplotlib axes to plot on.
-            kwargs_draw (Optional[Dict]): Additional keyword arguments for nx.draw.
-            kwargs_edge_labels (Optional[Dict]): Additional keyword arguments for nx.draw_networkx_edge_labels.
-        Returns:
-            Tuple[Figure, Axes]: The matplotlib figure and axes objects.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        digraph, max_generation, max_xpos = self._build_rProcess_reverse_decay_digraph(nuclide, nx.DiGraph())
-        return self.plot(
-            digraph,
-            max_generation,
-            max_xpos,
-            label_pos,
-            fig,
-            axes,
-            kwargs_draw,
-            kwargs_edge_labels,
-        )
 
 
-    @staticmethod
-    def plot(
-        digraph: nx.DiGraph,
-        max_generation: int,
-        max_xpos: int,
-        label_pos: float = 0.3,
-        fig: Optional[mpl.figure.Figure] = None,
-        axes: Optional[mpl.axes.Axes] = None,
-        kwargs_draw: Optional[Dict[str, Any]] = None,
-        kwargs_edge_labels: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-        """
-        Plot the decay diagram using networkx and matplotlib.
-        Args:
-            digraph (DiGraph): The networkx DiGraph to plot.
-            max_generation (int): Maximum generation in the decay chain.
-            max_xpos (int): Maximum x position in the decay chain.
-            label_pos (float): Position of edge labels along the edge.
-            fig (Optional[Figure]): Existing matplotlib figure to plot on.
-            axes (Optional[Axes]): Existing matplotlib axes to plot on.
-            kwargs_draw (Optional[Dict]): Additional keyword arguments for nx.draw.
-            kwargs_edge_labels (Optional[Dict]): Additional keyword arguments for nx.draw_networkx_edge_labels.
-        Returns:
-            Tuple[Figure, Axes]: The matplotlib figure and axes objects.
-        """
-        positions = nx.get_node_attributes(digraph, "pos")
-        node_labels = nx.get_node_attributes(digraph, "label")
-        edge_labels = nx.get_edge_attributes(digraph, "label")
-
-        # Prepare figure and axes
-        fig, axes = _check_fig_axes(
-            fig, axes, figsize=(3 * max_xpos + 1.5, 3 * max_generation + 1.5)
-        )
-
-        # Set default drawing parameters if not provided
-        kwargs_draw = kwargs_draw or {}
-        kwargs_draw.setdefault("node_size", 6000)
-        kwargs_draw.setdefault("node_color", "#1f77b4")
-        kwargs_draw.setdefault("edgecolors", "#000000")
-        kwargs_draw.setdefault("edge_color", "#000000")
-        kwargs_draw.setdefault("node_shape", "o")
-        kwargs_draw.setdefault("alpha", 0.8)
-        nx.draw(
-            G = digraph,
-            pos = positions,
-            ax = axes,
-            labels = node_labels,
-            **kwargs_draw,
-        )
-
-        # Set default edge label parameters if not provided
-        kwargs_edge_labels = kwargs_edge_labels or {}
-        kwargs_edge_labels.setdefault("font_size", 14)
-        # kwargs_edge_labels.setdefault("font_color", "red")
-        # kwargs_edge_labels.setdefault("font_weight", "bold")
-        kwargs_edge_labels.setdefault("bbox", {"boxstyle": None, "ec": (1.0, 1.0, 1.0), "fc": (1.0, 1.0, 1.0)})
-        kwargs_edge_labels.setdefault("rotate", False)
-
-        nx.draw_networkx_edge_labels(
-            G = digraph,
-            pos = positions,
-            edge_labels = edge_labels,
-            label_pos = label_pos,
-            ax = axes,
-            **kwargs_edge_labels,
-        )
-
-        axes.set_xlim(-0.3, max_xpos + 0.3)
-        axes.set_ylim(-max_generation - 0.3, 0.3)
-
-        return fig, axes
-
-
-    def _build_decay_digraph(
-        self,
-        nuclide: str,
-        digraph: nx.DiGraph
-    ) -> nx.DiGraph:
-        """
-        Build the decay directed graph starting from the specified nuclide.
-        Args:
-            nuclide (str): Starting nuclide symbol.
-            digraph (DiGraph): The networkx DiGraph to build.
-        Returns:
-            Tuple[DiGraph, int, int]: The graph, maximum generation, and maximum x position.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        generation_max_xpos = {0: 0}  # Track max x position for each generation
-        dequeue = deque([nuclide])  # Queue for BFS
-        generations = deque([0])         # Track generation (depth)
-        xpositions = deque([0])          # Track x position for layout
-        node_label = (
-            _parse_nuclide_label(nuclide)
-            + '\n' 
-            + str(self.decay_database.get_nuclide_half_life(nuclide, 'readable'))
-        )
-        
-        digraph.add_node(nuclide, generation=0, xpos=0, label=node_label)
-        seen = {nuclide}  # Track visited nodes
-
-        while dequeue:
-            parent_nuclide = dequeue.popleft()
-            generation = generations.popleft() + 1
-            xpos = xpositions.popleft()
-            if generation not in generation_max_xpos:
-                generation_max_xpos[generation] = -1
-
-            daughter_nuclides = self.find_daughters(parent_nuclide)
-            xpos = max(xpos, generation_max_xpos[generation] + 1)
-            xcounter = 0
-            for daughter in daughter_nuclides:
-                decay_mode, branching_ratio = self.decay_database.get_decay_channel(parent_nuclide, daughter)
-                # Skip spontaneous fission (SF) nodes
-                if daughter == "SF" or decay_mode == "SF":
-                    continue
-                # If daughter not seen, add to graph and queue
-                if daughter not in seen:
-                    node_label = _parse_nuclide_label(daughter)
-                    if daughter in self.decay_database.nuclide_index_map:
-                        node_label += f'\n{self.decay_database.get_nuclide_half_life(daughter, "readable")}'
-                        if np.isfinite(self.decay_database.get_nuclide_half_life(daughter, 's')):
-                            dequeue.append(daughter)
-                            generations.append(generation)
-                            xpositions.append(xpos + xcounter)
-                    digraph.add_node(
-                        daughter,
-                        generation=generation,
-                        xpos=xpos + xcounter,
-                        label=node_label,
-                    )
-                    seen.add(daughter)
-                    if xpos + xcounter > generation_max_xpos[generation]:
-                        generation_max_xpos[generation] = xpos + xcounter
-                    xcounter += 1
-                # Add edge with decay mode and branching ratio label
-                edge_label = (
-                    _parse_decay_mode_label(decay_mode)
-                    + '\n'
-                    + f'{branching_ratio*100:.2f}%'
-                )
-                digraph.add_edge(Nuclide(parent_nuclide).nuclide_symbol, daughter, label=edge_label)
-
-        # Assign positions for plotting
-        for node in digraph:
-            digraph.nodes[node]["pos"] = (
-                digraph.nodes[node]["xpos"],
-                digraph.nodes[node]["generation"] * -1,
-            )
-
-        return digraph, max(generation_max_xpos), max(generation_max_xpos.values())
-    
-
-    def _build_reverse_decay_digraph(
-        self,
-        nuclide: str,
-        digraph: nx.DiGraph
-    ) -> Tuple[nx.DiGraph, int, int]:
-        """
-        Build the reverse decay directed graph (parents to the specified nuclide).
-        Args:
-            nuclide (str): Target nuclide symbol.
-            digraph (DiGraph): The networkx DiGraph to build.
-        Returns:
-            Tuple[DiGraph, int, int]: The graph, maximum generation, and maximum x position.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        generation_max_xpos = {0: 0}
-        dequeue = deque([nuclide])
-        generations = deque([0])
-        xpositions = deque([0])
-        node_label = (
-            _parse_nuclide_label(nuclide)
-            + '\n' 
-            + str(self.decay_database.get_nuclide_half_life(nuclide, 'readable'))
-        )
-        digraph.add_node(nuclide, generation=0, xpos=0, label=node_label)
-        seen = {nuclide}
-
-        while dequeue:
-            daughter_nuclide = dequeue.popleft()
-            generation = generations.popleft() + 1
-            xpos = xpositions.popleft()
-            if generation not in generation_max_xpos:
-                generation_max_xpos[generation] = -1
-
-            parent_nuclides = self.find_parents(daughter_nuclide)
-            xpos = max(xpos, generation_max_xpos[generation] + 1)
-            xcounter = 0
-            for parent in parent_nuclides:
-                if parent not in seen:
-                    node_label = _parse_nuclide_label(parent)
-                    if parent in self.decay_database.nuclide_index_map:
-                        node_label += f'\n{self.decay_database.get_nuclide_half_life(parent, "readable")}'
-                        if np.isfinite(self.decay_database.get_nuclide_half_life(parent, 's')):
-                            dequeue.append(parent)
-                            generations.append(generation)
-                            xpositions.append(xpos + xcounter)
-                    digraph.add_node(
-                        parent,
-                        generation=generation,
-                        xpos=xpos + xcounter,
-                        label=node_label,
-                    )
-                    seen.add(parent)
-                    if xpos + xcounter > generation_max_xpos[generation]:
-                        generation_max_xpos[generation] = xpos + xcounter
-                    xcounter += 1
-                decay_mode, branching_ratio = self.decay_database.get_decay_channel(parent, daughter_nuclide)
-                if decay_mode:
-                    edge_label = (
-                        _parse_decay_mode_label(decay_mode)
-                        + '\n'
-                        + f'{branching_ratio*100:.2f}%'
-                    )
-                    digraph.add_edge(parent, daughter_nuclide, label=edge_label)
-
-        # Assign positions for plotting
-        for node in digraph:
-            digraph.nodes[node]["pos"] = (
-                digraph.nodes[node]["xpos"],
-                digraph.nodes[node]["generation"] * -1,
-            )
-
-        return digraph, max(generation_max_xpos), max(generation_max_xpos.values()) 
-
-
-
-    def _build_rProcess_reverse_decay_digraph(
-        self,
-        nuclide: str,
-        digraph: nx.DiGraph
-    ) -> Tuple[nx.DiGraph, int, int]:
-        """
-        Build the r-process reverse decay directed graph (parents) for the specified nuclide.
-        Args:
-            nuclide (str): Target nuclide symbol.
-            digraph (DiGraph): The networkx DiGraph to build.
-        Returns:
-            Tuple[DiGraph, int, int]: The graph, maximum generation, and maximum x position.
-        """
-        nuclide = Nuclide(nuclide).nuclide_symbol
-        generation_max_xpos = {0: 0}
-        dequeue = deque([nuclide])
-        generations = deque([0])
-        xpositions = deque([0])
-        node_label = (
-            _parse_nuclide_label(nuclide)
-            + '\n' 
-            + str(self.decay_database.get_nuclide_half_life(nuclide, 'readable'))
-        )
-        digraph.add_node(nuclide, generation=0, xpos=0, label=node_label)
-        seen = {nuclide}
-
-        while dequeue:
-            daughter_nuclide = dequeue.popleft()
-            generation = generations.popleft() + 1
-            xpos = xpositions.popleft()
-            if generation not in generation_max_xpos:
-                generation_max_xpos[generation] = -1
-
-            parent_nuclides = self.find_parents(daughter_nuclide)
-            xpos = max(xpos, generation_max_xpos[generation] + 1)
-            xcounter = 0
-            for parent in parent_nuclides:
-                decay_mode, branching_ratio = self.decay_database.get_decay_channel(parent, daughter_nuclide)
-                if decay_mode in ['β+&EC', 'SF', 'IT']:
-                    continue
-                # if self.decay_database.get_nuclide_half_life(parent, 's') < 1.0:
-                #     continue
-                if parent not in seen:
-                    node_label = _parse_nuclide_label(parent)
-                    if parent in self.decay_database.nuclide_index_map:
-                        node_label += f'\n{self.decay_database.get_nuclide_half_life(parent, "readable")}'
-                        if np.isfinite(self.decay_database.get_nuclide_half_life(parent, 's')):
-                            dequeue.append(parent)
-                            generations.append(generation)
-                            xpositions.append(xpos + xcounter)
-                    digraph.add_node(
-                        parent,
-                        generation=generation,
-                        xpos=xpos + xcounter,
-                        label=node_label,
-                    )
-                    seen.add(parent)
-                    if xpos + xcounter > generation_max_xpos[generation]:
-                        generation_max_xpos[generation] = xpos + xcounter
-                    xcounter += 1
-                if decay_mode:
-                    edge_label = (
-                        _parse_decay_mode_label(decay_mode)
-                        + '\n'
-                        + f'{branching_ratio*100:.2f}%'
-                    )
-                    digraph.add_edge(parent, daughter_nuclide, label=edge_label)
-
-        # Assign positions for plotting
-        for node in digraph:
-            digraph.nodes[node]["pos"] = (
-                digraph.nodes[node]["xpos"],
-                digraph.nodes[node]["generation"] * -1,
-            )
-
-        return digraph, max(generation_max_xpos), max(generation_max_xpos.values()) 
-        
-
-    def plot_local_nuclear_chart_for_rprocess_chain(
-        self,
-        nuclide: str,
-        figure: Optional[plt.figure] = None,
-        nuclei_linewidths: float = 0.3,
-        figsize: Tuple[float, float] = (9, 6),
-        dpi: int = 300,
-        magic_numbers: List[int] = [2, 8, 20, 28, 50, 82, 126],
-    ) -> plt.figure:
-        """
-        Plot the local nuclear chart for the r-process chain involving the specified nuclide.
-        Args:
-            nuclide (str): The starting nuclide symbol.
-            figure (plt.figure, optional): Existing matplotlib figure.
-            nuclei_linewidths (float): Line width for nuclei.
-            figsize (Tuple[float, float]): Figure size.
-            dpi (int): Resolution.
-            magic_numbers (List[int]): Magic numbers.
-        Returns:
-            plt.figure: matplotlib figure object.
-        """
-        digraph, _, _ = self._build_rProcess_reverse_decay_digraph(nuclide, nx.DiGraph())
-        nuclides = list(digraph.nodes)
-        unstable = []
-        stable = []
-        for n in nuclides:
-            try:
-                parsed = Nuclide(n)
-                Z = parsed.Z
-                N = parsed.N
-                state = parsed.state
-                if state:
-                    continue 
-                half_life = self.decay_database.get_nuclide_half_life(n, units="s")
-                if half_life == float('inf'):
-                    stable.append((N, Z))
-                else:
-                    unstable.append((N, Z, half_life))
-            except Exception:
-                continue
-
-        colormap = HalfLifeColorMap(self.decay_database.half_life_data)
-        range_groups = {key: [] for key in colormap.ranges.keys()}
-        for N, Z, half_life in unstable:
-            range_key = colormap.get_range_for_half_life(half_life)
-            if range_key:
-                range_groups[range_key].append((N, Z, half_life))
-
-        fig, ax = colormap._create_figure(figure, figsize, dpi)
-        colormap._plot_stable_nuclei(ax, stable, nuclei_linewidths)
-        colormap._plot_unstable_nuclei(ax, range_groups, colormap, nuclei_linewidths)
-        pos = {}
-        for n in nuclides:
-            try:
-                parsed = Nuclide(n)
-                pos[n] = (parsed.N, parsed.Z)
-            except Exception:
-                continue
-        nx.draw_networkx_edges(
-            digraph, pos, ax=ax, arrows=True, arrowstyle='-|>', arrowsize=10, edge_color='black', width=1.0
-        )
-        edge_labels = nx.get_edge_attributes(digraph, "label")
-        nx.draw_networkx_edge_labels(
-            digraph, pos, edge_labels=edge_labels, ax=ax,
-            font_size=3, font_color='black', label_pos=0.5, rotate=False,
-            bbox={"boxstyle": "round,pad=0.1", "fc": "white", "ec": "none", "alpha": 0.7}
-        )
-        all_N_values, all_Z_values = colormap._get_axis_limits(range_groups, stable)
-        colormap._mark_magic_numbers(ax, magic_numbers, range_groups, stable)
-        colormap._set_axis_properties(ax, all_N_values, all_Z_values)
-        colormap._plot_legend(ax, range_groups, stable)
-        return fig
-
-
-def _check_fig_axes(
-    fig_in: Optional[mpl.figure.Figure],
-    axes_in: Optional[mpl.axes.Axes],
-    **kwargs,
-) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-    """
-    Check and create matplotlib figure and axes if needed for plotting.
-    Args:
-        fig_in (Optional[Figure]): Input figure.
-        axes_in (Optional[Axes]): Input axes.
-        **kwargs: Additional arguments for plt.subplots.
-    Returns:
-        Tuple[Figure, Axes]: The figure and axes to use.
-    """
-    if fig_in is None and axes_in is None:
-        fig, axes = plt.subplots(**kwargs)
-    elif fig_in is None:
-        axes = axes_in
-        fig = axes.get_figure()
-    elif axes_in is None:
-        fig = fig_in
-        axes = fig.gca()
-    else:
-        fig = fig_in
-        axes = axes_in
-    return fig, axes
-
-
-def _parse_nuclide_label(nuclide: str) -> str:
-    """
-    Format a nuclide symbol into a label with superscript mass number for plotting.
-    Args:
-        nuclide (str): Nuclide symbol in format 'Element-MassNumber'.
-    Returns:
-        str: Formatted nuclide label with superscript mass number.
-    Raises:
-        ValueError: If the nuclide format is invalid.
-    """
-    if nuclide == "SF":
-        return "SF"
-    if nuclide == "X":
-        return "SF"
-    if "-" not in nuclide:
-        raise ValueError(f"Invalid nuclide format: {nuclide}. Expected format 'Element-MassNumber'.")
-    nuclide_unicode_map = {
-        "0": "\N{SUPERSCRIPT ZERO}",
-        "1": "\N{SUPERSCRIPT ONE}",
-        "2": "\N{SUPERSCRIPT TWO}",
-        "3": "\N{SUPERSCRIPT THREE}",
-        "4": "\N{SUPERSCRIPT FOUR}",
-        "5": "\N{SUPERSCRIPT FIVE}",
-        "6": "\N{SUPERSCRIPT SIX}",
-        "7": "\N{SUPERSCRIPT SEVEN}",
-        "8": "\N{SUPERSCRIPT EIGHT}",
-        "9": "\N{SUPERSCRIPT NINE}",
-        "M": "\N{MODIFIER LETTER SMALL M}",
-        "N": "\N{SUPERSCRIPT LATIN SMALL LETTER N}",
-        "O": "\N{MODIFIER LETTER SMALL O}",
-        "P": "\N{MODIFIER LETTER SMALL P}",
-        "Q": "\N{LATIN SMALL LETTER Q}",
-        "R": "\N{MODIFIER LETTER SMALL R}",
-        "X": "\N{MODIFIER LETTER SMALL X}",
-    }
-    element_symbol, mass_number = nuclide.split("-")
-    mass_number_unicode = "".join([nuclide_unicode_map.get(char, char) for char in mass_number])
-    return mass_number_unicode + element_symbol
-
-
-def _parse_decay_mode_label(decay_mode: str) -> str:
-    """
-    Format a decay mode string into a label with unicode characters for plotting.
-    Args:
-        decay_mode (str): Decay mode symbol.
-    Returns:
-        str: Formatted decay mode label with unicode characters.
-    """
-    decay_mode_unicode_map = {
-        "α": "\N{GREEK SMALL LETTER ALPHA}",
-        "β": "\N{GREEK SMALL LETTER BETA}",
-        "ε": "\N{GREEK SMALL LETTER EPSILON}",
-        "+": "\N{SUPERSCRIPT PLUS SIGN}",
-        "-": "\N{SUPERSCRIPT MINUS}",
-    }
-    for unformatted, formatted in decay_mode_unicode_map.items():
-        decay_mode = decay_mode.replace(unformatted, formatted)
-    return decay_mode

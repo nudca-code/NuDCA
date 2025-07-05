@@ -32,7 +32,6 @@ JY_CGS       = unit.Jy.cgs.scale             # Jy = 1e-23
 FLUX_STD     = 3631.0 * JY_CGS               #
 
 
-
 # SI Units
 KM_SI = unit.km.si.scale
 M_SUN_SI = const.M_sun.si.value

@@ -40,9 +40,7 @@ pip install nudca
 
 ## Documentation
 
-For detailed documentation, please visit our [documentation site](https://nudca-code.github.io/nudca.github.io/).
-
-
+For detailed documentation, please visit our [documentation site](https://nudca-code.github.io/nudca-main/).
 
 ## Citation
 
