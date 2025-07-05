@@ -5,4 +5,3 @@ readthedocs-sphinx-search==0.3.2
 sphinx_copybutton==0.5.2
 sphinx_design==0.6.1
 sphinx-tags==0.4
-sphinxemoji==0.3.1
