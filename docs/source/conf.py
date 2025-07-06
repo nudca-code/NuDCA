@@ -140,12 +140,6 @@ add_module_names = False
 
 # Autosummary settings
 autosummary_generate = True
-autosummary_imported_members = False
-autosummary_generate_overwrite = True
-autosummary_filename_map = {}
-
-# Directory for autosummary generated files
-autosummary_output_dir = 'generated'
 
 # Copy button settings
 copybutton_prompt_text = r">>> |\.\.\. |\$ "
@@ -161,8 +155,6 @@ mathjax3_config = {
     },
 }
 
-# Suppress specific warnings if needed
-suppress_warnings = ['autosummary']
 
 # TODO extension settings
 todo_include_todos = True
