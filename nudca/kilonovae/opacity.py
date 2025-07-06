@@ -78,9 +78,51 @@ class KNOpacity(object):
 
     @staticmethod
     def opacity_from_formula_Wu(electron_fraction: Union[float, List[float], np.ndarray]) -> Union[float, List[float]]:
-        '''Wu et al. 2022
-            (doi: 10.1093/mnras/stac399)
-        '''
+        """
+        Returns the opacity from the formula of Wu et al. 2022 (doi: 10.1093/mnras/stac399)
+
+        Parameters
+        ----------
+        electron_fraction : Union[float, List[float], np.ndarray]
+            Electron fraction(s) for which to calculate opacity.
+
+        Returns
+        -------
+        opacity : Union[float, List[float]]
+            Opacity value(s) for the given electron fraction(s).
+
+        Raises
+        ------
+        ValueError
+            If the electron fraction is out of range.
+            If the input type is wrong.
+
+        See Also
+        --------
+        opacity_from_formula_Ekanger : Opacity from the formula of Ekanger et al. 2023
+        opacity_from_tabular_Tanaka_Ye : Opacity from the tabular data of Tanaka et al. 2020
+
+
+        Notes
+        -----
+        The opacity is calculated using the formula:
+        
+        .. math::
+            \kappa = \frac{9}{1 + (4x)^{12}}
+        
+        where :math:`x` is the electron fraction.
+
+        References
+        ----------
+        Wu, J., et al. 2022, MNRAS, 517, 5445
+
+        Examples
+        --------
+        >>> opacity = KNOpacity('Formula', 'Wu2022')([0.2, 0.3])
+        >>> print(opacity)
+        [10.0, 10.0]
+        
+        """
         if isinstance(electron_fraction, float):
             if electron_fraction < 0. or electron_fraction > 0.5:
                 raise ValueError('The electron fraction is out of range\n'

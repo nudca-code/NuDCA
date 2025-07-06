@@ -1,7 +1,8 @@
 # Defining the exact version will make sure things don't break
 sphinx==8.2.3
-sphinx_book_theme==1.1.4
+pydata_sphinx_theme==0.16.1
 readthedocs-sphinx-search==0.3.2
 sphinx_copybutton==0.5.2
 sphinx_design==0.6.1
 sphinx-tags==0.4
+myst_parser
